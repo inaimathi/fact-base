@@ -9,6 +9,18 @@
    (history :accessor history :initform nil)))
 
 ;;;;;;;;;; Basics
+(defun make-range-fn (&optional min-time max-time)
+  (cond ((and min-time max-time)
+	 (lambda (entry) 
+	   (local-time:timestamp>= max-time (car entry) min-time)))
+	(max-time
+	 (lambda (entry)
+	   (local-time:timestamp>= max-time (car entry))))
+	(min-time
+	 (lambda (entry)
+	   (local-time:timestamp>= (car entry) min-time)))
+	(t (constantly t))))
+
 (defmacro matching? (&rest optima-clauses)
   "Takes an optima match clause. 
 Returns the predicate of one argument that checks if its argument matches the given clause."
@@ -35,23 +47,24 @@ Returns the predicate of one argument that checks if its argument matches the gi
 (defmethod delete ((fn function) (lst list)) 
   (remove-if fn lst))
 
-(defmethod calculate-current ((history list))
-  (loop with res = (list)
-     for entry in history
-     do (setf res
-	      (match entry
-		((list _ :insert fact)
-		 (insert fact res))
-		((list _ :delete fn _)
-		 (delete fn res))))
-     finally (return res)))
+(defmethod project ((history list) &key min-time max-time)
+  (let ((range-fn (make-range-fn min-time max-time)))
+    (loop with res = (list)
+       for entry in history when (funcall range-fn entry)
+       do (setf res
+		(match entry
+		  ((list _ :insert fact)
+		   (insert fact res))
+		  ((list _ :delete fn _)
+		   (delete fn res))))
+       finally (return res))))
 
 ;;;;;;;;;; Fact-base specific
 (defmethod select ((fn function) (state fact-base))
   (select fn (current state)))
 
-(defmethod calculate-current! ((state fact-base))
-  (setf (current state) (calculate-current (reverse (history state)))))
+(defmethod project! ((state fact-base))
+  (setf (current state) (project (reverse (history state)))))
 
 (defmethod multi-insert! ((b/c-pairs list) (state fact-base))
   (loop with id = (next-id! state)
@@ -114,13 +127,10 @@ Returns the predicate of one argument that checks if its argument matches the gi
     (loop for rec in (reverse (history state)) do (write-entry! rec s)
        finally (setf (last-saved state) (caar (history state))))))
 
-(defmethod read! ((file-name string) &key (min-time +epoch+) max-time)
+(defmethod read! ((file-name string) &key min-time max-time)
   (when (cl-fad:file-exists-p file-name)
     (with-open-file (s file-name :direction :input)
-      (let ((range-fn 
-	     (if (numberp max-time)
-		 (lambda (entry) (local-time:timestamp>= max-time (car entry) min-time))
-		 (lambda (entry) (local-time:timestamp>= (car entry) min-time)))))
+      (let ((range-fn (make-range-fn min-time max-time)))
 	(loop with max-time = +epoch+
 	   for entry = (read-entry! s) while entry for ts = (first entry)
 	   when (funcall range-fn entry) collect entry into es
