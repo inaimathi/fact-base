@@ -1,11 +1,11 @@
 ;;;; fact-base.lisp
-
 (in-package #:fact-base)
 
 (defclass fact-base ()
   ((id :reader id :initarg :id)
+   (fid :accessor fid :initform 0)
+   (last-saved :accessor last-saved :initform (local-time:now))
    (current :accessor current :initform nil)
-   (last-saved :accessor last-saved :initform 0)
    (history :accessor history :initform nil)))
 
 ;;;;;;;;;; Basics
@@ -21,6 +21,11 @@ Returns the predicate of one argument that checks if its argument matches the gi
 (defmethod file-name ((state fact-base))
   (string-downcase (symbol-name (id state))))
 
+(defmethod next-id! ((state fact-base))
+  (let ((res (fid state)))
+    (incf (fid state))
+    res))
+
 (defmethod select ((fn function) (lst list))
   (loop for fact in lst when (funcall fn fact) collect fact))
 
@@ -32,11 +37,13 @@ Returns the predicate of one argument that checks if its argument matches the gi
 
 (defmethod calculate-current ((history list))
   (loop with res = (list)
-     for (time type f) in history
+     for entry in history
      do (setf res
-	      (case type
-		(insert (insert f res))
-		(delete (delete (eval `(matching? ,f)) res))))
+	      (match entry
+		((list _ :insert fact)
+		 (insert fact res))
+		((list _ :delete fn _)
+		 (delete fn res))))
      finally (return res)))
 
 ;;;;;;;;;; Fact-base specific
@@ -44,46 +51,88 @@ Returns the predicate of one argument that checks if its argument matches the gi
   (select fn (current state)))
 
 (defmethod calculate-current! ((state fact-base))
-  (setf (current state) (calculate-current! (reverse (history state)))))
+  (setf (current state) (calculate-current (reverse (history state)))))
+
+(defmethod multi-insert! ((b/c-pairs list) (state fact-base))
+  (loop with id = (next-id! state)
+     for (b c) in b/c-pairs do (insert! (list id b c) state)))
 
 (defmethod insert! ((fact list) (state fact-base))
   (assert (and (cddr fact) (not (cdddr fact))) nil "INSERT! :: A fact is a list of length 3")
-  (let ((time (get-universal-time)))
+  (let ((time (local-time:now)))
     (push fact (current state))
-    (push (list time 'insert fact) (history state))
+    (push (list time :insert fact) (history state))
     nil))
 
 (defmacro delete! (match-clause state)
   (with-gensyms (s time fn)
     `(let* ((,s ,state)
-	    (,time (get-universal-time))
+	    (,time (local-time:now))
 	    (,fn (matching? ,match-clause)))
        (setf (current ,s) (delete ,fn (current ,s)))
-       (push (list ,time 'delete ',match-clause) (history ,s))
+       (push (list ,time :delete ,fn ',match-clause) (history ,s))
        nil)))
 
 ;;;;;;;;;; /(De)?Serialization/i
+(defvar +epoch+ (local-time:universal-to-timestamp 0))
+
+(defun list->timestamp (timestamp-list)
+  (destructuring-bind (day sec nsec) timestamp-list
+    (local-time:make-timestamp :day day :sec sec :nsec nsec)))
+
+(defun timestamp->list (timestamp)
+  (list (local-time:day-of timestamp) (local-time:sec-of timestamp) (local-time:nsec-of timestamp)))
+
+(defmethod write-entry! ((entry list) (s stream))
+  (match entry
+    ((list ts :insert fact) 
+     (format s "~s~%" (list (timestamp->list ts) :insert fact)))
+    ((list ts :delete _ template)
+     (format s "~s~%" (list (timestamp->list ts) :delete template)))))
+
+(defmethod read-entry! ((s stream))
+  (awhen (read s nil nil)
+    (cons (list->timestamp (car it))
+	  (match (cdr it)
+	    ((list :delete template)
+	     (list :delete (eval `(matching? ,template)) template))
+	    (val val)))))
+
 (defmethod update! ((state fact-base) &key (file-name (file-name state)))
   (ensure-directories-exist file-name)
   (with-open-file (s file-name :direction :output :if-exists :append :if-does-not-exist :create)
     (loop with latest = (last-saved state)
        for rec in (reverse (history state)) for time = (first rec)
-       when (> time latest) do (format s "~s~%" rec)
+       when (local-time:timestamp> time latest) do (write-entry! rec s)
        finally (setf (last-saved state) (caar (history state))))))
 
 (defmethod write! ((state fact-base) &key (file-name (file-name state)))
   (ensure-directories-exist file-name)
   (with-open-file (s file-name :direction :output :if-exists :supersede :if-does-not-exist :create)
-    (loop for rec in (reverse (history state)) do (format s "~s~%" rec)
+    (loop for rec in (reverse (history state)) do (write-entry! rec s)
        finally (setf (last-saved state) (caar (history state))))))
 
-(defmethod read! ((file-name string) &key (min-time 0) (max-time :now))
+(defmethod read! ((file-name string) &key (min-time +epoch+) max-time)
   (when (cl-fad:file-exists-p file-name)
     (with-open-file (s file-name :direction :input)
       (let ((range-fn 
 	     (if (numberp max-time)
-		 (lambda (time) (>= max-time time min-time))
-		 (lambda (time) (>= time min-time)))))
-	(reverse (loop for rec = (read s nil nil) while rec
-		    for (time type f) = rec
-		    when (funcall range-fn time) collect rec))))))
+		 (lambda (entry) (local-time:timestamp>= max-time (car entry) min-time))
+		 (lambda (entry) (local-time:timestamp>= (car entry) min-time)))))
+	(loop with max-time = +epoch+
+	   for entry = (read-entry! s) while entry for ts = (first entry)
+	   when (funcall range-fn entry) collect entry into es
+	   when (local-time:timestamp>= ts max-time) do (setf max-time ts)
+	   maximize (match entry
+		      ((list _ :insert (list id _ _)) id)
+		      (_ 0)) into max-id
+	   finally (return (values es max-time max-id)))))))
+
+(defmethod load! ((file-name string))
+  (let ((res (make-instance 'fact-base :id (intern (string-upcase file-name) :keyword))))
+    (multiple-value-bind (es time id) (read! file-name)
+      (setf (history res) (reverse es)
+	    (fid res) (+ id 1)
+	    (last-saved res) time))
+    (calculate-current! res)
+    res))
