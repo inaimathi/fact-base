@@ -2,9 +2,9 @@
 
 (asdf:defsystem #:fact-base
   :serial t
-  :description "Describe fact-base here"
-  :author "Your Name <your.name@example.com>"
-  :license "Specify license here"
+  :description "Simple implementation of fact-base data storage for Common Lisp"
+  :author "Inaimathi <leo.zovic@gmail.com> (I'm sorry)"
+  :license "AGPL3"
   :depends-on (#:alexandria #:anaphora #:local-time #:optima #:split-sequence #:cl-fad)
   :components ((:file "package")
                (:file "fact-base")))
