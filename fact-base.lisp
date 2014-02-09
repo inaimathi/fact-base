@@ -59,7 +59,9 @@ Returns the predicate of one argument that checks if its argument matches the gi
 
 (defmethod insert! ((fact list) (state fact-base))
   (assert (and (cddr fact) (not (cdddr fact))) nil "INSERT! :: A fact is a list of length 3")
-  (let ((time (local-time:now)))
+  (let ((time (local-time:now))
+	(id (first fact)))
+    (when (>= id (fid state)) (setf (fid state) (+ 1 id)))
     (push fact (current state))
     (push (list time :insert fact) (history state))
     nil))
