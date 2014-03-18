@@ -10,8 +10,10 @@
 ;;;;; Insertion/deletion
 (defmethod insert! ((fact list) (state index))
   (macrolet ((push! (a b c) 
-	       `(ins ,a ,b ,c (,(intern (format nil "~a~a~a" a b c)) state))))
-    (flet ((ins (a b c ix)
+	       `(insert-ix 
+		 ,a ,b ,c
+		 (,(intern (format nil "~a~a~a" a b c)) state))))
+    (flet ((insert-ix (a b c ix)
 	     (unless (gethash a ix)
 	       (setf (gethash a ix) (make-hash-table :test 'equal)))
 	     (setf (gethash b (gethash a ix)) c)))
@@ -21,6 +23,25 @@
 	(push! b c a)
 	(push! c a b)
 	(push! c b a))
+      state)))
+
+(defmethod remove! ((fact list) (state index))
+  (macrolet ((rem! (a b c) 
+	       `(remove-ix 
+		 ,a ,b ,c
+		 (,(intern (format nil "~a~a~a" a b c)) state))))
+    (flet ((remove-ix (a b c ix)
+	     (declare (ignore c))
+	     (when (gethash a ix)
+	       (remhash b (gethash a ix))
+	       (when (= 0 (hash-table-count (gethash a ix)))
+		 (remhash a ix)))))
+      (destructuring-bind (a b c) fact
+	(rem! a b c)
+	(rem! b a c)
+	(rem! b c a)
+	(rem! c a b)
+	(rem! c b a))
       state)))
 
 ;;;;; Indexing (and related utility operations)
