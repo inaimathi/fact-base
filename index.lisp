@@ -16,7 +16,7 @@
     (flet ((insert-ix (a b c ix)
 	     (unless (gethash a ix)
 	       (setf (gethash a ix) (make-hash-table :test 'equal)))
-	     (setf (gethash b (gethash a ix)) c)))
+	     (push c (gethash b (gethash a ix)))))
       (destructuring-bind (a b c) fact
 	(push! a b c)
 	(push! b a c)
@@ -31,9 +31,11 @@
 		 ,a ,b ,c
 		 (,(intern (format nil "~a~a~a" a b c)) state))))
     (flet ((remove-ix (a b c ix)
-	     (declare (ignore c))
-	     (when (gethash a ix)
-	       (remhash b (gethash a ix))
+	     (awhen (gethash a ix)
+	       (when (gethash b it)
+		 (setf (gethash b it) (remove c (gethash b it) :test #'equal)))
+	       (unless (car (gethash b it))
+		 (remhash b it))
 	       (when (= 0 (hash-table-count (gethash a ix)))
 		 (remhash a ix)))))
       (destructuring-bind (a b c) fact
@@ -55,10 +57,11 @@
   (multiple-value-bind (res res?) (gethash a (funcall lookup state))
     (when res?
       (if b
-	  (list (funcall reorder (list a b (gethash b res))))
+	  (loop for elem in (gethash b res)
+	     collect (funcall reorder (list a b elem)))
 	  (loop for k being the hash-keys of res
-	     for v being the hash-values of res
-	     collect (funcall reorder (list a k v)))))))
+	     append (loop for elem in (gethash k res)
+		       collect (funcall reorder (list a k elem))))))))
 
 (defmacro define-index (&rest order)
   (let ((args (butlast order))
@@ -72,3 +75,10 @@
 (define-index b c a)
 (define-index c a b)
 (define-index c b a)
+
+;;;;; Test forms
+;; (insert! (list 2 :whiskey :foxtrot) fb)
+;; (insert! (list 1 :foxtrot :beta) fb)
+;; (insert! (list 0 :whiskey :tango) fb)
+;; (insert! (list 4 :tango :beta) fb)
+;; (insert! (list 0 :b :c) fb)
