@@ -42,8 +42,8 @@ Returns the predicate of one argument that checks if its argument matches the gi
 (defmethod select ((fn function) (lst list))
   (loop for fact in lst when (funcall fn fact) collect fact))
 
-(defmethod index-by ((lookup symbol) (state index) fst &optional snd)
-  (index-by lookup state fst snd))
+(defmethod index-by ((lookup symbol) (state fact-base) fst &optional snd)
+  (index-by lookup (index state) fst snd))
 
 (defmethod insert ((fact list) (state list)) 
   (cons fact state))
