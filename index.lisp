@@ -52,18 +52,19 @@
 	 (list a b c)))))
 
 (defmethod index-internal ((state index) (lookup function) (reorder function) &optional a b)
-  (let ((res-a (gethash a (funcall lookup state))))
-    (if b
-	(list (funcall reorder (list a b (gethash b res-a))))
-	(loop for k being the hash-keys of res-a
-	   for v being the hash-values of res-a
-	   collect (funcall reorder (list a k v))))))
+  (multiple-value-bind (res res?) (gethash a (funcall lookup state))
+    (when res?
+      (if b
+	  (list (funcall reorder (list a b (gethash b res))))
+	  (loop for k being the hash-keys of res
+	     for v being the hash-values of res
+	     collect (funcall reorder (list a k v)))))))
 
 (defmacro define-index (&rest order)
   (let ((args (butlast order))
 	(ix-name (intern (format nil "~{~a~}" order)))
 	(ix-type (intern (format nil "~{~a~}" (butlast order)) :keyword)))
-    `(defmethod index ((state index) (lookup (eql ,ix-type)) &optional ,@args)
+    `(defmethod index-by ((lookup (eql ,ix-type)) (state index) &optional ,@args)
        (index-internal state #',ix-name (reorder ,@order) ,@args))))
 
 (define-index a b c)
