@@ -1,0 +1,13 @@
+(in-package #:fact-base)
+
+(defparameter fb (make-fact-base '(:a :b :ab)))
+(insert! (list 2 :whiskey :foxtrot) fb)
+(insert! (list 1 :foxtrot :beta) fb)
+(insert! (list 0 :whiskey :tango) fb)
+(insert! (list 4 :tango :beta) fb)
+(insert! (list 0 :b :c) fb)
+(show (index fb))
+(remove! (list 0 :whiskey :foxtrot) fb)
+(show (index fb))
+(remove! (list 2 :whiskey :foxtrot) fb)
+(show (index fb))

@@ -2,11 +2,11 @@
 (in-package #:fact-base)
 
 (defclass fact-base ()
-  ((id :reader id :initarg :id)
+  ((id :reader id :initarg :id :initform (gensym "FB-"))
    (fid :accessor fid :initform 0)
    (last-saved :accessor last-saved :initform (local-time:now))
    (current :accessor current :initform nil)
-   (index :reader index :initform (make-index :a) :initarg :index)
+   (index :accessor index :initform (make-index (list :a)) :initarg :index)
    (history :accessor history :initform nil)))
 
 (defun make-fact-base (indices)
@@ -160,11 +160,18 @@ Returns the predicate of one argument that checks if its argument matches the gi
 		      (_ 0)) into max-id
 	   finally (return (values es max-time max-id)))))))
 
-(defmethod load! ((file-name string))
+(defmethod index! ((state fact-base) (indices list))
+  (setf (index state) (make-index indices))
+  (map-insert! (current state) (index state))
+  nil)
+
+(defmethod load! ((file-name string) &key (indices '(:a)))
   (let ((res (make-instance 'fact-base :id (intern (string-upcase file-name) :keyword))))
     (multiple-value-bind (es time id) (read! file-name)
       (setf (history res) (reverse es)
 	    (fid res) (+ id 1)
-	    (last-saved res) time))
-    (calculate-current! res)
+	    (last-saved res) time
+	    (index res) (make-index indices)))
+    (project! res)
+    (map-insert! (current res) (index res))
     res))
