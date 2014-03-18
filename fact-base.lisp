@@ -6,8 +6,11 @@
    (fid :accessor fid :initform 0)
    (last-saved :accessor last-saved :initform (local-time:now))
    (current :accessor current :initform nil)
-   (index :reader index :initform (make-instance 'index))
+   (index :reader index :initform (make-index :a) :initarg :index)
    (history :accessor history :initform nil)))
+
+(defun make-fact-base (indices)
+  (make-instance 'fact-base :index (make-index indices)))
 
 ;;;;;;;;;; Basics
 (defun make-range-fn (&optional min-time max-time)
@@ -39,11 +42,23 @@ Returns the predicate of one argument that checks if its argument matches the gi
     (incf (fid state))
     res))
 
+(defmethod lookup ((state fact-base) &key a b c)
+  (let ((ix (decide-index a b c)))
+    (cond ((not ix)
+	   (warn "No indices provided, returning current fact base...%")
+	   (current state))
+	  ((indexed? (index state) ix)
+	   (index-by ix (index state) a b c))
+	  (t
+	   (warn "No relevant index found, traversing...~%")
+	   (loop for f in (current state)
+	      when (and (or (not a) (equal a (first f)))
+			(or (not b) (equal b (second f)))
+			(or (not c) (equal c (third f))))
+	      collect f)))))
+
 (defmethod select ((fn function) (lst list))
   (loop for fact in lst when (funcall fn fact) collect fact))
-
-(defmethod index-by ((lookup symbol) (state fact-base) fst &optional snd)
-  (index-by lookup (index state) fst snd))
 
 (defmethod insert ((fact list) (state list)) 
   (cons fact state))

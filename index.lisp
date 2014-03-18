@@ -1,82 +1,59 @@
 (in-package #:fact-base)
 
 (defclass index ()
-  ((abc :reader abc :initarg :abc :initform (make-hash-table :test 'equal))
-   (bac :reader bac :initarg :bac :initform (make-hash-table :test 'equal))
-   (bca :reader bca :initarg :bca :initform (make-hash-table :test 'equal))
-   (cab :reader cab :initarg :cab :initform (make-hash-table :test 'equal))
-   (cba :reader cba :initarg :bac :initform (make-hash-table :test 'equal))))
+  ((table :reader table :initform (make-hash-table :test 'equal))))
 
-;;;;; Insertion/deletion
+(defmethod show (thing &optional (depth 0))
+  (format t "~a~a" (make-string depth :initial-element #\space) thing))
+
+(defmethod show ((tbl hash-table) &optional (depth 0))
+  (loop for k being the hash-keys of tbl
+     for v being the hash-values of tbl
+     do (format t "~a~5@a ->~%" 
+		(make-string depth :initial-element #\space) k)
+     do (show v (+ depth 8))
+     do (format t "~%")))
+
+(defmethod show ((ix index) &optional (depth 0))
+  (show (table ix) depth))
+
+(defun make-index (indices)
+  (let ((index (make-instance 'index)))
+    (loop for ix in indices
+       do (setf (gethash ix (table index))
+		(make-hash-table :test 'equal)))
+    index))
+
+(defmethod indexed? ((state index) (ix-type symbol))
+  (gethash ix-type (table state)))
+
+(define-index a)
+(define-index b)
+(define-index c)
+(define-index a b)
+(define-index a c)
+(define-index b c)
+
+;;;;; The lookup interface
+(defun decide-index (&optional a b c)
+  (cond ((and a b) :ab)
+	((and a c) :ac)
+	((and b c) :bc)
+	(a :a)
+	(b :b)
+	(c :c)))
+
 (defmethod insert! ((fact list) (state index))
-  (macrolet ((push! (a b c) 
-	       `(insert-ix 
-		 ,a ,b ,c
-		 (,(intern (format nil "~a~a~a" a b c)) state))))
-    (flet ((insert-ix (a b c ix)
-	     (unless (gethash a ix)
-	       (setf (gethash a ix) (make-hash-table :test 'equal)))
-	     (push c (gethash b (gethash a ix)))))
-      (destructuring-bind (a b c) fact
-	(push! a b c)
-	(push! b a c)
-	(push! b c a)
-	(push! c a b)
-	(push! c b a))
-      state)))
+  (loop for ix being the hash-keys of (table state)
+     do (insert-ix ix state fact)))
 
 (defmethod remove! ((fact list) (state index))
-  (macrolet ((rem! (a b c) 
-	       `(remove-ix 
-		 ,a ,b ,c
-		 (,(intern (format nil "~a~a~a" a b c)) state))))
-    (flet ((remove-ix (a b c ix)
-	     (awhen (gethash a ix)
-	       (when (gethash b it)
-		 (setf (gethash b it) (remove c (gethash b it) :test #'equal)))
-	       (unless (car (gethash b it))
-		 (remhash b it))
-	       (when (= 0 (hash-table-count (gethash a ix)))
-		 (remhash a ix)))))
-      (destructuring-bind (a b c) fact
-	(rem! a b c)
-	(rem! b a c)
-	(rem! b c a)
-	(rem! c a b)
-	(rem! c b a))
-      state)))
+  (loop for ix being the hash-keys of (table state)
+     do (format t "Updating '~a'...~%" ix)
+     do (remove-ix ix state fact)))
 
-;;;;; Indexing (and related utility operations)
-(defmacro reorder (fst snd thd)
-  (with-gensyms (res)
-    `(lambda (,res)
-       (destructuring-bind (,fst ,snd ,thd) ,res
-	 (list a b c)))))
-
-(defmethod index-internal ((state index) (lookup function) (reorder function) a &optional b)
-  (multiple-value-bind (res res?) (gethash a (funcall lookup state))
-    (when res?
-      (if b
-	  (loop for elem in (gethash b res)
-	     collect (funcall reorder (list a b elem)))
-	  (loop for k being the hash-keys of res
-	     append (loop for elem in (gethash k res)
-		       collect (funcall reorder (list a k elem))))))))
-
-(defmacro define-index (&rest order)
-  (let ((args (butlast order))
-	(ix-name (intern (format nil "~{~a~}" order)))
-	(ix-type (intern (format nil "~{~a~}" (butlast order)) :keyword)))
-    `(defmethod index-by ((lookup (eql ,ix-type)) (state index) ,(first order) &optional ,(second order))
-       (index-internal state #',ix-name (reorder ,@order) ,@args))))
-
-(define-index a b c)
-(define-index b a c)
-(define-index b c a)
-(define-index c a b)
-(define-index c b a)
-
-;;;;; Test forms
+;;;;;;; Test forms
+;; (defparameter fb (make-fact-base '(:a :b :ab)))
 ;; (insert! (list 2 :whiskey :foxtrot) fb)
 ;; (insert! (list 1 :foxtrot :beta) fb)
 ;; (insert! (list 0 :whiskey :tango) fb)
