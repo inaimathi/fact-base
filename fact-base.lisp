@@ -6,6 +6,7 @@
    (fid :accessor fid :initform 0)
    (last-saved :accessor last-saved :initform (local-time:now))
    (current :accessor current :initform nil)
+   (index :reader index :initform (make-instance 'index))
    (history :accessor history :initform nil)))
 
 ;;;;;;;;;; Basics
@@ -41,6 +42,9 @@ Returns the predicate of one argument that checks if its argument matches the gi
 (defmethod select ((fn function) (lst list))
   (loop for fact in lst when (funcall fn fact) collect fact))
 
+(defmethod index-by ((lookup symbol) (state index) fst &optional snd)
+  (index-by lookup state fst snd))
+
 (defmethod insert ((fact list) (state list)) 
   (cons fact state))
 
@@ -75,18 +79,19 @@ Returns the predicate of one argument that checks if its argument matches the gi
   (let ((time (local-time:now))
 	(id (first fact)))
     (when (>= id (fid state)) (setf (fid state) (+ 1 id)))
+    (insert! fact (index state))
     (push fact (current state))
     (push (list time :insert fact) (history state))
     nil))
 
-(defmacro delete! (match-clause state)
-  (with-gensyms (s time fn)
-    `(let* ((,s ,state)
-	    (,time (local-time:now))
-	    (,fn (matching? ,match-clause)))
-       (setf (current ,s) (delete ,fn (current ,s)))
-       (push (list ,time :delete ,fn ',match-clause) (history ,s))
-       nil)))
+;; (defmacro delete! (match-clause state)
+;;   (with-gensyms (s time fn)
+;;     `(let* ((,s ,state)
+;; 	    (,time (local-time:now))
+;; 	    (,fn (matching? ,match-clause)))
+;;        (setf (current ,s) (delete ,fn (current ,s)))
+;;        (push (list ,time :delete ,fn ',match-clause) (history ,s))
+;;        nil)))
 
 ;;;;;;;;;; /(De)?Serialization/i
 (defvar +epoch+ (local-time:universal-to-timestamp 0))

@@ -51,7 +51,7 @@
        (destructuring-bind (,fst ,snd ,thd) ,res
 	 (list a b c)))))
 
-(defmethod index-internal ((state index) (lookup function) (reorder function) &optional a b)
+(defmethod index-internal ((state index) (lookup function) (reorder function) a &optional b)
   (multiple-value-bind (res res?) (gethash a (funcall lookup state))
     (when res?
       (if b
@@ -64,7 +64,7 @@
   (let ((args (butlast order))
 	(ix-name (intern (format nil "~{~a~}" order)))
 	(ix-type (intern (format nil "~{~a~}" (butlast order)) :keyword)))
-    `(defmethod index-by ((lookup (eql ,ix-type)) (state index) &optional ,@args)
+    `(defmethod index-by ((lookup (eql ,ix-type)) (state index) ,(first order) &optional ,(second order))
        (index-internal state #',ix-name (reorder ,@order) ,@args))))
 
 (define-index a b c)
