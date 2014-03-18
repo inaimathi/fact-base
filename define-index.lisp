@@ -29,19 +29,17 @@
        (destructuring-bind (a b c) ,fact
 	 (declare (ignorable a b c))
 	 (let ((,ix (gethash ,ix-name (table ,state))))
-	   (format t "Found index...~%")
 	   (awhen (gethash ,fst ,ix)
-	     (format t "Found entry '~s'...~%" it)
 	     ,@(if snd
 		   `((when (gethash ,snd it)
 		       (setf (gethash ,snd it) (remove ,fact (gethash ,snd it) :test #'equal)))
 		     (unless (car (gethash ,snd it))
 		       (remhash ,snd it))
 		     (when (= 0 (hash-table-count (gethash ,fst ,ix)))
-		       (format t "Checking for empty indexes...~%")
 		       (remhash ,fst ,ix)))
-		   `((setf (gethash ,fst ,ix) (remove ,fact it :test #'equal))))
-	     (format t "Removed entry...~%")))))))
+		   `((setf (gethash ,fst ,ix) (remove ,fact it :test #'equal))
+		     (unless (car (gethash ,fst ,ix))
+		       (remhash ,fst ,ix))))))))))
 
 (defmacro define-index (&rest order)
   (let ((ix-name (intern (format nil "~{~a~}" order) :keyword))

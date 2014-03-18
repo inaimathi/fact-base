@@ -49,13 +49,4 @@
 
 (defmethod remove! ((fact list) (state index))
   (loop for ix being the hash-keys of (table state)
-     do (format t "Updating '~a'...~%" ix)
      do (remove-ix ix state fact)))
-
-;;;;;;; Test forms
-;; (defparameter fb (make-fact-base '(:a :b :ab)))
-;; (insert! (list 2 :whiskey :foxtrot) fb)
-;; (insert! (list 1 :foxtrot :beta) fb)
-;; (insert! (list 0 :whiskey :tango) fb)
-;; (insert! (list 4 :tango :beta) fb)
-;; (insert! (list 0 :b :c) fb)
