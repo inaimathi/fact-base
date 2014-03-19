@@ -51,7 +51,7 @@
   (loop for ix being the hash-keys of (table state)
      do (deep-push! state (format-index ix fact) fact)))
 
-(defmethod remove! ((fact list) (state index))
+(defmethod delete! ((fact list) (state index))
   (loop for ix being the hash-keys of (table state)
      do (deep-remove! state (format-index ix fact) fact)))
 

@@ -63,8 +63,8 @@ Returns the predicate of one argument that checks if its argument matches the gi
 (defmethod insert ((fact list) (state list)) 
   (cons fact state))
 
-(defmethod delete ((fn function) (lst list)) 
-  (remove-if fn lst))
+(defmethod delete ((fact list) (lst list))
+  (remove fact lst :test #'equal))
 
 (defmethod project ((history list) &key min-time max-time)
   (let ((range-fn (make-range-fn min-time max-time)))
@@ -74,8 +74,8 @@ Returns the predicate of one argument that checks if its argument matches the gi
 		(match entry
 		  ((list _ :insert fact)
 		   (insert fact res))
-		  ((list _ :delete fn _)
-		   (delete fn res))))
+		  ((list _ :delete fact)
+		   (delete fact res))))
        finally (return res))))
 
 ;;;;;;;;;; Fact-base specific
@@ -99,14 +99,11 @@ Returns the predicate of one argument that checks if its argument matches the gi
     (push (list time :insert fact) (history state))
     nil))
 
-;; (defmacro delete! (match-clause state)
-;;   (with-gensyms (s time fn)
-;;     `(let* ((,s ,state)
-;; 	    (,time (local-time:now))
-;; 	    (,fn (matching? ,match-clause)))
-;;        (setf (current ,s) (delete ,fn (current ,s)))
-;;        (push (list ,time :delete ,fn ',match-clause) (history ,s))
-;;        nil)))
+(defmethod delete! ((fact list) (state fact-base))
+  (setf (current state) (delete fact (current state)))
+  (push (list (local-time:now) :delete fact) (history state))
+  (delete! fact (index state))
+  nil)
 
 ;;;;;;;;;; /(De)?Serialization/i
 (defvar +epoch+ (local-time:universal-to-timestamp 0))
@@ -119,21 +116,14 @@ Returns the predicate of one argument that checks if its argument matches the gi
   (list (local-time:day-of timestamp) (local-time:sec-of timestamp) (local-time:nsec-of timestamp)))
 
 (defmethod write-entry! ((entry list) (s stream))
-  (match entry
-    ((list ts :insert fact) 
-     (format s "~s~%" (list (timestamp->list ts) :insert fact)))
-    ((list ts :delete _ template)
-     (format s "~s~%" (list (timestamp->list ts) :delete template)))))
+  (format s "~s~%" (cons (timestamp->list (car entry)) (cdr entry))))
 
 (defmethod read-entry! ((s stream))
   (awhen (read s nil nil)
     (cons (list->timestamp (car it))
-	  (match (cdr it)
-	    ((list :delete template)
-	     (list :delete (eval `(matching? ,template)) template))
-	    (val val)))))
+	  (cdr it))))
 
-(defmethod update! ((state fact-base) &key (file-name (file-name state)))
+(defmethod write-diff! ((state fact-base) &key (file-name (file-name state)))
   (ensure-directories-exist file-name)
   (with-open-file (s file-name :direction :output :if-exists :append :if-does-not-exist :create)
     (loop with latest = (last-saved state)
@@ -175,3 +165,10 @@ Returns the predicate of one argument that checks if its argument matches the gi
     (project! res)
     (map-insert! (current res) (index res))
     res))
+
+;; (defmethod load-diff! ((state fact-base) &key (file-name (file-name state)))
+;;   ;; check current latest insertion (check current history length? skip that many lines?)
+;;   ;; read through the specified file until you get to it
+;;   ;; once you get there, start plonking results into history of `state`
+;;   ;; when you're done, update the current fid, index, last-saved (should that last one really happen?), projection and inices
+;;   )
