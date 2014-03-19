@@ -9,7 +9,7 @@
    (index :accessor index :initform (make-index '(:a :b :c)) :initarg :index)
    (history :accessor history :initform nil)))
 
-(defun make-fact-base (&optional (indices '(:a :b :c)))
+(defun make-fact-base (&key (indices '(:a :b :c)))
   (make-instance 'fact-base :index (make-index indices)))
 
 ;;;;;;;;;; Basics

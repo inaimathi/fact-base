@@ -26,7 +26,8 @@
   (gethash ix-type (table state)))
 
 (defun decide-index (&optional a b c)
-  (cond ((and a b) (list :ab a b))
+  (cond ((and a b c) (list :abc a b c))
+	((and a b) (list :ab a b))
 	((and a c) (list :ac a c))
 	((and b c) (list :bc b c))
 	((and a) (list :a a))
@@ -37,6 +38,7 @@
   (destructuring-bind (a b c) fact
     `(,ix-type
       ,@ (case ix-type
+	   (:abc (list a b c))
 	   (:ab (list a b))
 	   (:ac (list a c))
 	   (:bc (list b c))
