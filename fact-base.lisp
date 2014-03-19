@@ -3,13 +3,13 @@
 
 (defclass fact-base ()
   ((id :reader id :initarg :id :initform (gensym "FB-"))
-   (fid :accessor fid :initform 0)
+   (fact-id :accessor fact-id :initform 0)
    (last-saved :accessor last-saved :initform (local-time:now))
    (current :accessor current :initform nil)
-   (index :accessor index :initform (make-index (list :a)) :initarg :index)
+   (index :accessor index :initform (make-index '(:a :b :c)) :initarg :index)
    (history :accessor history :initform nil)))
 
-(defun make-fact-base (indices)
+(defun make-fact-base (&optional (indices '(:a :b :c)))
   (make-instance 'fact-base :index (make-index indices)))
 
 ;;;;;;;;;; Basics
@@ -38,8 +38,8 @@ Returns the predicate of one argument that checks if its argument matches the gi
   (string-downcase (symbol-name (id state))))
 
 (defmethod next-id! ((state fact-base))
-  (let ((res (fid state)))
-    (incf (fid state))
+  (let ((res (fact-id state)))
+    (incf (fact-id state))
     res))
 
 (defmethod lookup ((state fact-base) &key a b c)
@@ -93,7 +93,7 @@ Returns the predicate of one argument that checks if its argument matches the gi
   (assert (and (cddr fact) (not (cdddr fact))) nil "INSERT! :: A fact is a list of length 3")
   (let ((time (local-time:now))
 	(id (first fact)))
-    (when (>= id (fid state)) (setf (fid state) (+ 1 id)))
+    (when (>= id (fact-id state)) (setf (fact-id state) (+ 1 id)))
     (insert! fact (index state))
     (push fact (current state))
     (push (list time :insert fact) (history state))
@@ -159,7 +159,7 @@ Returns the predicate of one argument that checks if its argument matches the gi
   (let ((res (make-instance 'fact-base :id (intern (string-upcase file-name) :keyword))))
     (multiple-value-bind (es time id) (read! file-name)
       (setf (history res) (reverse es)
-	    (fid res) (+ id 1)
+	    (fact-id res) (+ id 1)
 	    (last-saved res) time
 	    (index res) (make-index indices)))
     (project! res)
@@ -170,5 +170,5 @@ Returns the predicate of one argument that checks if its argument matches the gi
 ;;   ;; check current latest insertion (check current history length? skip that many lines?)
 ;;   ;; read through the specified file until you get to it
 ;;   ;; once you get there, start plonking results into history of `state`
-;;   ;; when you're done, update the current fid, index, last-saved (should that last one really happen?), projection and inices
+;;   ;; when you're done, update the current fact-id, index, last-saved (should that last one really happen?), projection and inices
 ;;   )
