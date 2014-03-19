@@ -7,7 +7,7 @@
   :license "AGPL3"
   :depends-on (#:alexandria #:anaphora #:local-time #:optima #:cl-fad)
   :components ((:file "package")
-	       (:file "define-index")
+	       (:file "util")
 	       (:file "index")
                (:file "fact-base")))
 

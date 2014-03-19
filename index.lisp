@@ -10,37 +10,55 @@
 		(make-hash-table :test 'equal)))
     index))
 
+(defmethod deep-lookup ((state index) (ixes list))
+  (deep-lookup (table state) ixes))
+
+(defmethod deep-remove! ((state index) (ixes list) fact)
+  (multiple-value-bind (res ix) (traverse (table state) ixes)
+    (when ix
+      (setf (gethash ix res)
+	    (remove fact (gethash ix res) :test #'equal)))))
+
+(defmethod deep-push! ((state index) (ixes list) value)
+  (deep-push! (table state) ixes value))
+
 (defmethod indexed? ((state index) (ix-type symbol))
   (gethash ix-type (table state)))
 
-(define-index a)
-(define-index b)
-(define-index c)
-(define-index a b)
-(define-index a c)
-(define-index b c)
-
-;;;;; The lookup interface
 (defun decide-index (&optional a b c)
-  (cond ((and a b) :ab)
-	((and a c) :ac)
-	((and b c) :bc)
-	(a :a)
-	(b :b)
-	(c :c)))
+  (cond ((and a b) (list :ab a b))
+	((and a c) (list :ac a c))
+	((and b c) (list :bc b c))
+	((and a) (list :a a))
+	((and b) (list :b b))
+	((and c) (list :c c))))
+
+(defmethod format-index ((ix-type symbol) (fact list))
+  (destructuring-bind (a b c) fact
+    `(,ix-type
+      ,@ (case ix-type
+	   (:ab (list a b))
+	   (:ac (list a c))
+	   (:bc (list b c))
+	   (:a (list a))
+	   (:b (list b))
+	   (:c (list c))))))
 
 (defmethod map-insert! ((facts list) (state index))
   (dolist (f facts) (insert! f state)))
 
 (defmethod insert! ((fact list) (state index))
   (loop for ix being the hash-keys of (table state)
-     do (insert-ix ix state fact)))
+     do (deep-push! state (format-index ix fact) fact)))
 
 (defmethod remove! ((fact list) (state index))
   (loop for ix being the hash-keys of (table state)
-     do (remove-ix ix state fact)))
+     do (deep-remove! state (format-index ix fact) fact)))
 
 ;;;;; Show methods
+;; Entirely for debugging purposes. 
+;; Do not use in production. 
+;; Seriously.
 (defmethod show (thing &optional (depth 0))
   (format t "~a~a" (make-string depth :initial-element #\space) thing))
 

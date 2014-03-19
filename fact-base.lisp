@@ -43,12 +43,12 @@ Returns the predicate of one argument that checks if its argument matches the gi
     res))
 
 (defmethod lookup ((state fact-base) &key a b c)
-  (let ((ix (decide-index a b c)))
-    (cond ((not ix)
+  (let ((ixs (decide-index a b c)))
+    (cond ((not ixs)
 	   (warn "No indices provided, returning current fact base...%")
 	   (current state))
-	  ((indexed? (index state) ix)
-	   (index-by ix (index state) a b c))
+	  ((indexed? (index state) (first ixs))
+	   (deep-lookup (index state) ixs))
 	  (t
 	   (warn "No relevant index found, traversing...~%")
 	   (loop for f in (current state)
