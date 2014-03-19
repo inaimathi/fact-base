@@ -10,6 +10,15 @@
 		(make-hash-table :test 'equal)))
     index))
 
+(defmethod deep-lookup ((state index) (ixes list))
+  (deep-lookup (table state) ixes))
+
+(defmethod deep-set! ((state index) (ixes list) value)
+  (deep-set! (table state) ixes value))
+
+(defmethod deep-push! ((state index) (ixes list) value)
+  (deep-push! (table state) ixes value))
+
 (defmethod indexed? ((state index) (ix-type symbol))
   (gethash ix-type (table state)))
 
@@ -22,19 +31,29 @@
 
 ;;;;; The lookup interface
 (defun decide-index (&optional a b c)
-  (cond ((and a b) :ab)
-	((and a c) :ac)
-	((and b c) :bc)
-	(a :a)
-	(b :b)
-	(c :c)))
+  (cond ((and a b) 
+	 (list :ab a b))
+	((and a c)
+	 (list :ac a c))
+	((and b c)
+	 (list :bc b c))
+	(a (list :a a))
+	(b (list :b b))
+	(c (list :c c))))
+
+(defmethod format-index ((ix-type symbol) (fact list))
+  (case ix-type
+    (:ab (list ix-type (first fact) (second fact)))
+    (:ac (list ix-type (first fact) (third fact)))
+    (:bc (list ix-type (second fact) (third fact)))))
 
 (defmethod map-insert! ((facts list) (state index))
   (dolist (f facts) (insert! f state)))
 
 (defmethod insert! ((fact list) (state index))
-  (loop for ix being the hash-keys of (table state)
-     do (insert-ix ix state fact)))
+  (destructuring-bind (a b c) fact
+    (loop for ix being the hash-keys of (table state)
+       do (deep-push! state ??? fact))))
 
 (defmethod remove! ((fact list) (state index))
   (loop for ix being the hash-keys of (table state)
