@@ -1,5 +1,8 @@
 (in-package #:fact-base)
 
+(defun new-id (&optional prefix) 
+  (intern (symbol-name (gensym prefix)) :keyword))
+
 (defmethod traverse ((state hash-table) (ixes list))
   "Takes a hash-table and a list of indices.
 Indexes into the hash-table recursively until it either runs out of indices or finds a nil.

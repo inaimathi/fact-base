@@ -8,5 +8,5 @@
   (:export :make-fact-base :matching? :current :history :last-saved :_
 	   :file-name :next-id! 
 	   :select :lookup :insert! :multi-insert! :delete! :project! :project
-	   :write! :write-diff! :load! :index!))
+	   :write! :write-delta! :load! :index!))
 

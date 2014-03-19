@@ -2,15 +2,15 @@
 (in-package #:fact-base)
 
 (defclass fact-base ()
-  ((id :reader id :initarg :id :initform (gensym "FB-"))
+  ((id :reader id :initarg :id)
    (fact-id :accessor fact-id :initform 0)
    (last-saved :accessor last-saved :initform (local-time:now))
    (current :accessor current :initform nil)
-   (index :accessor index :initform (make-index '(:a :b :c)) :initarg :index)
+   (index :accessor index :initarg :index)
    (history :accessor history :initform nil)))
 
-(defun make-fact-base (&key (indices '(:a :b :c)))
-  (make-instance 'fact-base :index (make-index indices)))
+(defun make-fact-base (&key (indices '(:a :b :c)) (id (new-id "FB-")))
+  (make-instance 'fact-base :index (make-index indices) :id id))
 
 ;;;;;;;;;; Basics
 (defun make-range-fn (&optional min-time max-time)
@@ -123,7 +123,7 @@ Returns the predicate of one argument that checks if its argument matches the gi
     (cons (list->timestamp (car it))
 	  (cdr it))))
 
-(defmethod write-diff! ((state fact-base) &key (file-name (file-name state)))
+(defmethod write-delta! ((state fact-base) &key (file-name (file-name state)))
   (ensure-directories-exist file-name)
   (with-open-file (s file-name :direction :output :if-exists :append :if-does-not-exist :create)
     (loop with latest = (last-saved state)
@@ -137,38 +137,35 @@ Returns the predicate of one argument that checks if its argument matches the gi
     (loop for rec in (reverse (history state)) do (write-entry! rec s)
        finally (setf (last-saved state) (caar (history state))))))
 
+(defmethod read! ((s stream) &key min-time max-time)
+  (let ((range-fn (make-range-fn min-time max-time)))
+    (loop with max-time = +epoch+
+       for entry = (read-entry! s) while entry for ts = (first entry)
+       when (funcall range-fn entry) collect entry into es
+       when (local-time:timestamp>= ts max-time) do (setf max-time ts)
+       maximize (match entry
+		  ((list _ :insert (list id _ _)) id)
+		  (_ 0)) into max-id
+       finally (return (values es max-time max-id)))))
+
 (defmethod read! ((file-name string) &key min-time max-time)
   (when (cl-fad:file-exists-p file-name)
     (with-open-file (s file-name :direction :input)
-      (let ((range-fn (make-range-fn min-time max-time)))
-	(loop with max-time = +epoch+
-	   for entry = (read-entry! s) while entry for ts = (first entry)
-	   when (funcall range-fn entry) collect entry into es
-	   when (local-time:timestamp>= ts max-time) do (setf max-time ts)
-	   maximize (match entry
-		      ((list _ :insert (list id _ _)) id)
-		      (_ 0)) into max-id
-	   finally (return (values es max-time max-id)))))))
+      (read! s :min-time min-time :max-time max-time))))
 
 (defmethod index! ((state fact-base) (indices list))
   (setf (index state) (make-index indices))
   (map-insert! (current state) (index state))
   nil)
 
-(defmethod load! ((file-name string) &key (indices '(:a)))
-  (let ((res (make-instance 'fact-base :id (intern (string-upcase file-name) :keyword))))
+(defmethod load! ((file-name string) &key (indices '(:a :b :c)))
+  (let ((res (make-fact-base 
+	      :id (intern (string-upcase file-name) :keyword)
+	      :indices indices)))
     (multiple-value-bind (es time id) (read! file-name)
       (setf (history res) (reverse es)
 	    (fact-id res) (+ id 1)
-	    (last-saved res) time
-	    (index res) (make-index indices)))
+	    (last-saved res) time))
     (project! res)
     (map-insert! (current res) (index res))
     res))
-
-;; (defmethod load-diff! ((state fact-base) &key (file-name (file-name state)))
-;;   ;; check current latest insertion (check current history length? skip that many lines?)
-;;   ;; read through the specified file until you get to it
-;;   ;; once you get there, start plonking results into history of `state`
-;;   ;; when you're done, update the current fact-id, index, last-saved (should that last one really happen?), projection and inices
-;;   )
