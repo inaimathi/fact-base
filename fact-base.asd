@@ -8,7 +8,6 @@
   :depends-on (#:alexandria #:anaphora #:local-time #:optima #:cl-fad)
   :components ((:file "package")
 	       (:file "util")
-	       (:file "define-index")
 	       (:file "index")
                (:file "fact-base")))
 
