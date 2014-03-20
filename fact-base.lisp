@@ -85,9 +85,10 @@ Returns the predicate of one argument that checks if its argument matches the gi
 (defmethod project! ((state fact-base))
   (setf (current state) (project (reverse (history state)))))
 
-(defmethod multi-insert! ((b/c-pairs list) (state fact-base))
+(defmethod multi-insert! ((state fact-base) (b/c-pairs list))
   (loop with id = (next-id! state)
-     for (b c) in b/c-pairs do (insert! (list id b c) state)))
+     for (b c) in b/c-pairs do (insert! (list id b c) state)
+     finally (return id)))
 
 (defmethod insert! ((fact list) (state fact-base))
   (assert (and (cddr fact) (not (cdddr fact))) nil "INSERT! :: A fact is a list of length 3")
@@ -130,13 +131,15 @@ Returns the predicate of one argument that checks if its argument matches the gi
   (with-open-file (s file-name :direction :output :if-exists :append :if-does-not-exist :create)
     (dolist (entry (reverse (delta state)))
       (write-entry! entry s))
-    (setf (delta state) nil)))
+    (setf (delta state) nil))
+  file-name)
 
 (defmethod write! ((state fact-base) &key (file-name (file-name state)))
   (ensure-directories-exist file-name)
   (with-open-file (s file-name :direction :output :if-exists :supersede :if-does-not-exist :create)
     (loop for rec in (reverse (history state)) do (write-entry! rec s)
-       finally (setf (delta state) nil))))
+       finally (setf (delta state) nil)))
+  file-name)
 
 (defmethod read! ((s stream) &key min-time max-time)
   (let ((range-fn (make-range-fn min-time max-time)))
