@@ -118,39 +118,42 @@ Returns the predicate of one argument that checks if its argument matches the gi
 (defun timestamp->list (timestamp)
   (list (local-time:day-of timestamp) (local-time:sec-of timestamp) (local-time:nsec-of timestamp)))
 
-(defmethod write-entry! ((entry list) (s stream))
-  (format s "~s~%" (cons (timestamp->list (car entry)) (cdr entry))))
-
 (defmethod read-entry! ((s stream))
   (awhen (read s nil nil)
     (cons (list->timestamp (car it))
 	  (cdr it))))
 
+(defmethod write-entry! ((entry list) (s stream))
+  (format s "~s~%" (cons (timestamp->list (car entry)) (cdr entry))))
+
+(defmethod write-entries! ((entries list) (file pathname) if-exists)
+  (with-open-file (s file :direction :output :if-exists if-exists :if-does-not-exist :create)
+    (dolist (entry (reverse entries))
+      (write-entry! entry s))))
+
+(defmethod write-entries! ((entries list) (file string) if-exists)
+  (write-entries! entries (pathname file) if-exists))
+
 (defmethod write-delta! ((state fact-base) &key (file-name (file-name state)))
   (ensure-directories-exist file-name)
-  (with-open-file (s file-name :direction :output :if-exists :append :if-does-not-exist :create)
-    (dolist (entry (reverse (delta state)))
-      (write-entry! entry s))
-    (setf (delta state) nil))
+  (write-entries! (delta state) file-name :append)
+  (setf (delta state) nil)
   file-name)
 
 (defmethod write! ((state fact-base) &key (file-name (file-name state)))
   (ensure-directories-exist file-name)
-  (with-open-file (s file-name :direction :output :if-exists :supersede :if-does-not-exist :create)
-    (loop for rec in (reverse (history state)) do (write-entry! rec s)
-       finally (setf (delta state) nil)))
+  (write-entries! (history state) file-name :supersede)
+  (setf (delta state) nil)
   file-name)
 
 (defmethod read! ((s stream) &key min-time max-time)
   (let ((range-fn (make-range-fn min-time max-time)))
-    (loop with max-time = +epoch+
-       for entry = (read-entry! s) while entry for ts = (first entry)
+    (loop for entry = (read-entry! s) while entry for ts = (first entry)
        when (funcall range-fn entry) collect entry into es
-       when (local-time:timestamp>= ts max-time) do (setf max-time ts)
        maximize (match entry
 		  ((list _ :insert (list id _ _)) id)
 		  (_ 0)) into max-id
-       finally (return (values es max-time max-id)))))
+       finally (return (values es max-id)))))
 
 (defmethod read! ((file-name string) &key min-time max-time)
   (when (cl-fad:file-exists-p file-name)
@@ -166,7 +169,7 @@ Returns the predicate of one argument that checks if its argument matches the gi
   (let ((res (make-fact-base 
 	      :id (intern (string-upcase file-name) :keyword)
 	      :indices indices)))
-    (multiple-value-bind (es time id) (read! file-name)
+    (multiple-value-bind (es id) (read! file-name)
       (setf (history res) (reverse es)
 	    (fact-id res) (+ id 1)))
     (project! res)
