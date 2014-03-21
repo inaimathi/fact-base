@@ -10,18 +10,6 @@
 		(make-hash-table :test 'equal)))
     index))
 
-(defmethod deep-lookup ((state index) (ixes list))
-  (deep-lookup (table state) ixes))
-
-(defmethod deep-remove! ((state index) (ixes list) fact)
-  (multiple-value-bind (res ix) (traverse (table state) ixes)
-    (when ix
-      (setf (gethash ix res)
-	    (remove fact (gethash ix res) :test #'equal)))))
-
-(defmethod deep-push! ((state index) (ixes list) value)
-  (deep-push! (table state) ixes value))
-
 (defmethod indexed? ((state index) (ix-type symbol))
   (gethash ix-type (table state)))
 
@@ -36,26 +24,30 @@
 
 (defmethod format-index ((ix-type symbol) (fact list))
   (destructuring-bind (a b c) fact
-    `(,ix-type
-      ,@ (case ix-type
-	   (:abc (list a b c))
-	   (:ab (list a b))
-	   (:ac (list a c))
-	   (:bc (list b c))
-	   (:a (list a))
-	   (:b (list b))
-	   (:c (list c))))))
+    (case ix-type
+      (:abc (list a b c))
+      (:ab (list a b))
+      (:ac (list a c))
+      (:bc (list b c))
+      (:a (list a))
+      (:b (list b))
+      (:c (list c)))))
 
 (defmethod map-insert! ((facts list) (state index))
   (dolist (f facts) (insert! f state)))
 
 (defmethod insert! ((fact list) (state index))
   (loop for ix being the hash-keys of (table state)
-     do (deep-push! state (format-index ix fact) fact)))
+     for ix-table being the hash-values of (table state)
+     do (push fact (gethash (format-index ix fact) ix-table))))
 
 (defmethod delete! ((fact list) (state index))
   (loop for ix being the hash-keys of (table state)
-     do (deep-remove! state (format-index ix fact) fact)))
+     for ix-table being the hash-values of (table state)
+     for formatted = (format-index ix fact)
+     do (setf (gethash formatted ix-table) 
+	      (remove fact (gethash formatted ix-table) :test #'equal :count 1))
+     unless (gethash formatted ix-table) do (remhash formatted ix-table)))
 
 ;;;;; Show methods
 ;; Entirely for debugging purposes. 

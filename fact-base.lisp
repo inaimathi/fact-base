@@ -9,6 +9,9 @@
    (index :accessor index :initarg :index)
    (history :accessor history :initform nil)))
 
+(defun new-id (&optional prefix) 
+  (intern (symbol-name (gensym prefix)) :keyword))
+
 (defun make-fact-base (&key (indices '(:a :b :c)) (id (new-id "FB-")))
   (make-instance 'fact-base :index (make-index indices) :id id))
 
@@ -48,7 +51,7 @@ Returns the predicate of one argument that checks if its argument matches the gi
 	   (warn "No indices provided, returning current fact base...%")
 	   (current state))
 	  ((indexed? (index state) (first ixs))
-	   (deep-lookup (index state) ixs))
+	   (gethash (rest ixs) (gethash (first ixs) (table (index state)))))
 	  (t
 	   (warn "No relevant index found, traversing...~%")
 	   (loop for f in (current state)
