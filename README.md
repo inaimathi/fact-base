@@ -190,3 +190,16 @@
 ##### `:write!`
 ##### `:update!`
 ##### `:load!`
+
+### Notes
+
+- A function like write-delta! that doesn't zero out a fact-bases' in-memory delta
+	- Could be useful for keeping delta backups
+	- Will you actually want that? Often enough to justify a top-level API hook rather than just history slicing? (Which will be more flexible too; specify a start and end then ship that out as a file)
+- Infrastructure to support starting from a non-empty fact-base
+	- Could be useful for reducing memory use at the expense of history granularity
+	- How much will it actually save?
+	- This would require a separation of fact-bases and deltas (which we should probably have anyhow)
+		- No, it wouldn't. You'd need a history label that looked like `(<timestamp> :initial <initial-fb>)`
+		- That could then get processed by `load!` and similar, and ignored when we're applying deltas, or when they don't appear at the beginning of a fact-base file
+	- This is a tough decision. On the one hand, I don't want there to be gigabyte-large files for no reason (and I suspect keeping *all* history forever is a bit of overkill for most practical uses), but on the other hand, the only way to prevent that in general seems to be history pruning. Once history is mutable, we don't have very many strong guarantees left about anything. For the moment, leave as is. If it turns out that FBs are fucking huge, I'll revisit this.
