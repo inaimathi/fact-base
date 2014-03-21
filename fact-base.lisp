@@ -109,8 +109,6 @@ Returns the predicate of one argument that checks if its argument matches the gi
   nil)
 
 ;;;;;;;;;; /(De)?Serialization/i
-(defvar +epoch+ (local-time:universal-to-timestamp 0))
-
 (defun list->timestamp (timestamp-list)
   (destructuring-bind (day sec nsec) timestamp-list
     (local-time:make-timestamp :day day :sec sec :nsec nsec)))
