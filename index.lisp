@@ -33,15 +33,15 @@
       (:b (list b))
       (:c (list c)))))
 
-(defmethod map-insert! ((facts list) (state index))
-  (dolist (f facts) (insert! f state)))
+(defmethod map-insert! ((state index) (facts list))
+  (dolist (f facts) (insert! state f)))
 
-(defmethod insert! ((fact list) (state index))
+(defmethod insert! ((state index) (fact list))
   (loop for ix being the hash-keys of (table state)
      for ix-table being the hash-values of (table state)
      do (push fact (gethash (format-index ix fact) ix-table))))
 
-(defmethod delete! ((fact list) (state index))
+(defmethod delete! ((state index) (fact list))
   (loop for ix being the hash-keys of (table state)
      for ix-table being the hash-values of (table state)
      for formatted = (format-index ix fact)

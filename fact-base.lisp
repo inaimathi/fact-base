@@ -69,11 +69,11 @@ Returns the predicate of one argument that checks if its argument matches the gi
 (defmethod select ((fn function) (lst list))
   (loop for fact in lst when (funcall fn fact) collect fact))
 
-(defmethod insert ((fact list) (state list)) 
+(defmethod insert ((state list) (fact list)) 
   (cons fact state))
 
-(defmethod delete ((fact list) (lst list))
-  (remove fact lst :test #'equal))
+(defmethod delete ((state list) (fact list))
+  (remove fact state :test #'equal))
 
 (defmethod project ((history list) &key min-time max-time)
   (let ((range-fn (make-range-fn min-time max-time)))
@@ -82,9 +82,9 @@ Returns the predicate of one argument that checks if its argument matches the gi
        do (setf res
 		(match entry
 		  ((list _ :insert fact)
-		   (insert fact res))
+		   (insert res fact))
 		  ((list _ :delete fact)
-		   (delete fact res))))
+		   (delete res fact))))
        finally (return res))))
 
 ;;;;;;;;;; Fact-base specific
@@ -96,10 +96,13 @@ Returns the predicate of one argument that checks if its argument matches the gi
 
 (defmethod multi-insert! ((state fact-base) (b/c-pairs list))
   (loop with id = (next-id! state)
-     for (b c) in b/c-pairs do (insert! (list id b c) state)
+     for (b c) in b/c-pairs do (insert! state (list id b c))
      finally (return id)))
 
-(defmethod insert! ((fact list) (state fact-base))
+(defmethod insert-new! ((state fact-base) b c)
+  (insert! state (list (next-id! state) b c)))
+
+(defmethod insert! ((state fact-base) (fact list))
   (assert (and (cddr fact) (not (cdddr fact))) nil "INSERT! :: A fact is a list of length 3")
   (let ((time (local-time:now))
 	(id (first fact)))
@@ -107,16 +110,17 @@ Returns the predicate of one argument that checks if its argument matches the gi
     (let ((h (list time :insert fact)))
       (push h (history state))
       (push h (delta state)))
-    (insert! fact (index state))
+    (insert! (index state) fact)
     (push fact (current state))
     nil))
 
-(defmethod delete! ((fact list) (state fact-base))
-  (setf (current state) (delete fact (current state)))
+(defmethod delete! ((state fact-base) (fact list))
+  (assert (and (cddr fact) (not (cdddr fact))) nil "DELETE! :: A fact is a list of length 3")
+  (setf (current state) (delete (current state) fact))
   (let ((h (list (local-time:now) :delete fact)))
     (push h (history state))
     (push h (delta state)))
-  (delete! fact (index state))
+  (delete! (index state) fact)
   nil)
 
 ;;;;;;;;;; /(De)?Serialization/i
@@ -182,5 +186,5 @@ Returns the predicate of one argument that checks if its argument matches the gi
       (setf (history res) (reverse es)
 	    (fact-id res) (+ id 1)))
     (project! res)
-    (map-insert! (current res) (index res))
+    (map-insert! (index res) (current res))
     res))
