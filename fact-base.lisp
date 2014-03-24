@@ -37,8 +37,14 @@ Returns the predicate of one argument that checks if its argument matches the gi
 	 ,@(loop for c in optima-clauses
 	      collect (list c t))))))
 
+(defmethod file-name ((str string))
+  (string-downcase str))
+
+(defmethod file-name ((sym symbol))
+  (string-downcase (symbol-name sym)))
+
 (defmethod file-name ((state fact-base))
-  (string-downcase (symbol-name (id state))))
+  (file-name (id state)))
 
 (defmethod next-id! ((state fact-base))
   (let ((res (fact-id state)))
@@ -107,7 +113,9 @@ Returns the predicate of one argument that checks if its argument matches the gi
 
 (defmethod delete! ((fact list) (state fact-base))
   (setf (current state) (delete fact (current state)))
-  (push (list (local-time:now) :delete fact) (history state))
+  (let ((h (list (local-time:now) :delete fact)))
+    (push h (history state))
+    (push h (delta state)))
   (delete! fact (index state))
   nil)
 
