@@ -2,18 +2,21 @@
 (in-package #:fact-base)
 
 (defclass fact-base ()
-  ((id :reader id :initarg :id)
+  ((file-name :reader file-name :initarg :file-name)
    (fact-id :accessor fact-id :initform 0)
    (delta :accessor delta :initform nil)
    (current :accessor current :initform nil)
    (index :accessor index :initarg :index)
    (history :accessor history :initform nil)))
 
-(defun new-id (&optional prefix) 
-  (intern (symbol-name (gensym prefix)) :keyword))
+(defun temp-file-name ()
+  (let* ((f (cl-fad:open-temporary))
+	 (fname (pathname f)))
+    (close f)
+    fname))
 
-(defun make-fact-base (&key (indices '(:a :b :c)) (id (new-id "FB-")))
-  (make-instance 'fact-base :index (make-index indices) :id id))
+(defun make-fact-base (&key (indices '(:a :b :c)) (file-name (temp-file-name)))
+  (make-instance 'fact-base :index (make-index indices) :file-name file-name))
 
 ;;;;;;;;;; Basics
 (defun make-range-fn (&optional min-time max-time)
@@ -36,15 +39,6 @@ Returns the predicate of one argument that checks if its argument matches the gi
        (match ,arg
 	 ,@(loop for c in optima-clauses
 	      collect (list c t))))))
-
-(defmethod file-name ((str string))
-  (string-downcase str))
-
-(defmethod file-name ((sym symbol))
-  (string-downcase (symbol-name sym)))
-
-(defmethod file-name ((state fact-base))
-  (file-name (id state)))
 
 (defmethod next-id! ((state fact-base))
   (let ((res (fact-id state)))
@@ -179,9 +173,7 @@ Returns the predicate of one argument that checks if its argument matches the gi
   nil)
 
 (defmethod load! ((file-name string) &key (indices '(:a :b :c)))
-  (let ((res (make-fact-base 
-	      :id (intern (string-upcase file-name) :keyword)
-	      :indices indices)))
+  (let ((res (make-fact-base :indices indices :file-name file-name)))
     (multiple-value-bind (es id) (read! file-name)
       (setf (history res) (reverse es)
 	    (fact-id res) (+ id 1)))
