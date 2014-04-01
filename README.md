@@ -21,15 +21,15 @@
 	#<PACKAGE "DEMO">
 	DEMO> (defparameter *db* (make-fact-base))
 	*DB*
-	DEMO> (insert! (list 0 :message "This is a sample message") *db*)
+	DEMO> (insert! *db* (list 0 :message "This is a sample message"))
 	NIL
-	DEMO> (insert! (list 1 :message "This is another one") *db*)
+	DEMO> (insert! *db* (list 1 :message "This is another one"))
 	NIL
-	DEMO> (insert! (list 1 :author "Inaimathi") *db*)
+	DEMO> (insert! *db* (list 1 :author "Inaimathi"))
 	NIL
-	DEMO> (insert! (list 2 :message "That second one was written by me. This one is a meta-message.") *db*)
+	DEMO> (insert! *db* (list 2 :message "That second one was written by me. This one is a meta-message."))
 	NIL
-	DEMO> (insert! (list 2 :type :meta) *db*)
+	DEMO> (insert! *db* (list 2 :type :meta))
 	NIL
 	DEMO> (current *db*)
 	((2 :TYPE :META)
@@ -60,10 +60,10 @@
 *we now resume your regularly scheduled demo.*
 
 	DEMO> (multi-insert!
+	       *db*
 	       '((:message "Getting sick of specifying IDs manually, so I'll use multi-insert!")
-		 (:user "Inaimathi")
-		 (:mood "Curious"))
-	       *db*)
+		     (:user "Inaimathi")
+		     (:mood "Curious")))
 	3
 	DEMO> (current *db*)
 	((3 :MOOD "Curious") (3 :USER "Inaimathi")
@@ -80,10 +80,10 @@
 	  (3 :MESSAGE
 	   "Getting sick of specifying IDs manually, so I'll use multi-insert!")))
 	DEMO> (multi-insert!
+	       *db*
 	       '((:message "This next one will just append the delta to the file created last time.")
-		 (:user "Inaimathi")
-		 (:mood "Still curious"))
-	       *db*)
+		     (:user "Inaimathi")
+		     (:mood "Still curious")))
 	4
 	DEMO> (write-delta! *db*)
 	"fb-1007"
@@ -110,10 +110,10 @@
 *That file wasn't cleared, then re-written. The delta was just appended to the bottom. Note that both `write!` and `write-delta!` take an optional filename as a parameter, so it's possible to break a fact-base up across files or back it up in another location*
 
 	DEMO> (multi-insert!
+	       *db*
 	       '((:message "Ok, lets do some lookups now")
-		 (:user "Inaimathi")
-		 (:mood "Thoughtful"))
-	       *db*)
+		     (:user "Inaimathi")
+		     (:mood "Thoughtful")))
 	5
 	DEMO> (lookup *db* :a 0)
 	((0 :MESSAGE "This is a sample message"))
@@ -147,30 +147,28 @@
 	
 	((5 :USER "Inaimathi"))
 	DEMO> (multi-insert!
+	       *db*
 	       '((:message "The index system is still naive. It only has separate indices on :a, :b and :c, you see, but it doesn't save itself the time by at least starting with the smallest known index yet.")
-		 (:user "Inaimathi")
-		 (:mood "Even more thoughtful"))
-	       *db*)
+		     (:user "Inaimathi")
+		     (:mood "Even more thoughtful")))
 	6
 	DEMO> (multi-insert!
+	       *db*
 	       '((:message "I'm going to fix that. In fact...")
-		 (:user "Inaimathi")
-		 (:mood "Even more thoughtful"))
-	       *db*)
+		     (:user "Inaimathi")
+		     (:mood "Even more thoughtful")))
 	7
 	DEMO> (lookup *db* :c "Even more thoughtful")
 	
 	((7 :MOOD "Even more thoughtful") (6 :MOOD "Even more thoughtful"))
 	T
-	DEMO> (insert! (list 6 :important nil))
-	; Evaluation aborted on #<SB-INT:SIMPLE-PROGRAM-ERROR "invalid number of arguments: ~S" {1004460C83}>.
-	DEMO> (insert! (list 6 :important nil) *db*)
+	DEMO> (insert! *db* (list 6 :important nil))
 	NIL
 	DEMO> (multi-insert!
+	       *db*
 	       '((:message "Yes, you can add metadata after the fact.")
-		 (:user "Inaimathi")
-		 (:mood "Oh, right..."))
-	       *db*)
+		     (:user "Inaimathi")
+		     (:mood "Oh, right...")))
 	8
 	DEMO> 
 
@@ -193,9 +191,8 @@
 
 ### Notes
 
-- A function like write-delta! that doesn't zero out a fact-bases' in-memory delta
-	- Could be useful for keeping delta backups
-	- Will you actually want that? Often enough to justify a top-level API hook rather than just history slicing? (Which will be more flexible too; specify a start and end then ship that out as a file)
+- Define a structure other than a list to store history.
+	-Specifically, you want the ability to push to its end (since that's the only way we'll ever be doing it)
 - Infrastructure to support starting from a non-empty fact-base
 	- Could be useful for reducing memory use at the expense of history granularity
 	- How much will it actually save?
