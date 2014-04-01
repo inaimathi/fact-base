@@ -7,12 +7,12 @@
   (:import-from #:anaphora #:awhen #:aif #:it)
   (:export :fact-base :make-fact-base :current :history :delta :_
 
-	   :meta-base :make-meta-base :add-fact-base! 
+	   :meta-base :make-meta-base :add-fact-base! :branch!
 	   :new-fact-base! :indices :list-bases :get-base
 
 	   :file-name :next-id!
 	   :lookup :select :matching? 
 	   :multi-insert! :insert-new! :insert! :delete! 
-	   :index! :project! :project
+	   :index! :project! :project :history-slice
 	   :write! :write-delta! :load!))
 

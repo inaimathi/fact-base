@@ -10,7 +10,7 @@
   (alexandria:hash-table-keys (fact-base-table state)))
 
 (defmethod next-id! ((state meta-base))
-  (format nil "branch-~a" (length (fact-base-table state))))
+  (format nil "branch-~a" (+ 1 (hash-table-count (fact-base-table state)))))
 
 (defun make-meta-base (&key (indices '(:a :b :c)) (file-name (cl-fad:pathname-as-directory (temp-file-name))))
   (let ((res (make-instance 'meta-base :file-name file-name :indices indices)))
@@ -36,7 +36,7 @@
      do (write! base :file-name fname :zero-delta? zero-delta?)))
 
 (defmethod load! ((base-type (eql :meta-base)) (file-name string) &key (indices '(:a :b :c)))
-  (let ((res (make-meta-base :indices indices :file-name file-name)))
+  (let ((res (make-meta-base :indices indices :file-name (namestring (cl-fad:pathname-as-directory file-name)))))
     (loop for file in (cl-fad:list-directory file-name)
        do (add-fact-base! res (load! :fact-base (namestring file))))
     res))
@@ -54,8 +54,10 @@
     :indices indices
     :file-name (merge-pathnames file-name (file-name state)))))
 
-;; (defmethod branch! ((state meta-base) (base fact-base) &key (new-name (next-id! state)) branch-point)
-;;   (unless (get-base state new-name)
-;;     (let ((f-name (merge-pathnames new-name (file-name state))))
-;;       (write! base :file-name f-name)
-;;       (setf (gethash new-name (fact-base-table state)) (load! f-name)))))
+(defmethod branch! ((state meta-base) (base fact-base) (branch-point list) &key (new-name (next-id! state)))
+  (unless (get-base state new-name)
+    (let* ((fname (merge-pathnames (file-namestring new-name) (file-name state)))
+	   (tmp (make-fact-base :indices (indices state) :file-name fname)))
+      (setf (history tmp) (history-slice base :max-time (list->timestamp branch-point)))
+      (write! tmp :file-name fname)
+      (add-fact-base! state (load! :fact-base (namestring fname))))))

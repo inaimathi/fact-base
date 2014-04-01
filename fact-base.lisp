@@ -42,6 +42,14 @@
 (defmethod delete ((state list) (fact list))
   (remove fact state :test #'equal))
 
+(defmethod history-slice ((history list) &key min-time max-time)
+  (let ((range-fn (make-range-fn min-time max-time)))
+    (loop for entry in history 
+       when (funcall range-fn entry) collect entry)))
+
+(defmethod history-slice ((state fact-base) &key min-time max-time)
+  (history-slice (history state) :min-time min-time :max-time max-time))
+
 (defmethod project ((history list) &key min-time max-time)
   (let ((range-fn (make-range-fn min-time max-time)))
     (loop with res = (list)
