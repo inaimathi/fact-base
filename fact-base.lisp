@@ -9,37 +9,10 @@
    (index :accessor index :initarg :index)
    (history :accessor history :initform nil)))
 
-(defun temp-file-name ()
-  (let* ((f (cl-fad:open-temporary))
-	 (fname (pathname f)))
-    (close f)
-    fname))
-
 (defun make-fact-base (&key (indices '(:a :b :c)) (file-name (temp-file-name)))
   (make-instance 'fact-base :index (make-index indices) :file-name file-name))
 
 ;;;;;;;;;; Basics
-(defun make-range-fn (&optional min-time max-time)
-  (cond ((and min-time max-time)
-	 (lambda (entry) 
-	   (local-time:timestamp>= max-time (car entry) min-time)))
-	(max-time
-	 (lambda (entry)
-	   (local-time:timestamp>= max-time (car entry))))
-	(min-time
-	 (lambda (entry)
-	   (local-time:timestamp>= (car entry) min-time)))
-	(t (constantly t))))
-
-(defmacro matching? (&rest optima-clauses)
-  "Takes an optima match clause. 
-Returns the predicate of one argument that checks if its argument matches the given clause."
-  (with-gensyms (arg)
-    `(lambda (,arg)
-       (match ,arg
-	 ,@(loop for c in optima-clauses
-	      collect (list c t))))))
-
 (defmethod next-id! ((state fact-base))
   (let ((res (fact-id state)))
     (incf (fact-id state))
@@ -141,16 +114,16 @@ Returns the predicate of one argument that checks if its argument matches the gi
 (defmethod write-entries! ((entries list) (file string) if-exists)
   (write-entries! entries (pathname file) if-exists))
 
-(defmethod write-delta! ((state fact-base) &key (file-name (file-name state)))
+(defmethod write-delta! ((state fact-base) &key (file-name (file-name state)) (zero-delta? t))
   (ensure-directories-exist file-name)
   (write-entries! (delta state) file-name :append)
-  (setf (delta state) nil)
+  (when zero-delta? (setf (delta state) nil))
   file-name)
 
-(defmethod write! ((state fact-base) &key (file-name (file-name state)))
+(defmethod write! ((state fact-base) &key (file-name (file-name state)) (zero-delta? t))
   (ensure-directories-exist file-name)
   (write-entries! (history state) file-name :supersede)
-  (setf (delta state) nil)
+  (when zero-delta? (setf (delta state) nil))
   file-name)
 
 (defmethod read! ((s stream) &key min-time max-time)
@@ -172,7 +145,7 @@ Returns the predicate of one argument that checks if its argument matches the gi
   (map-insert! (current state) (index state))
   nil)
 
-(defmethod load! ((file-name string) &key (indices '(:a :b :c)))
+(defmethod load! ((base-type (eql :fact-base)) (file-name string) &key (indices '(:a :b :c)))
   (let ((res (make-fact-base :indices indices :file-name file-name)))
     (multiple-value-bind (es id) (read! file-name)
       (setf (history res) (reverse es)
