@@ -8,7 +8,7 @@
   (:export :fact-base :make-fact-base :current :history :delta :_
 
 	   :meta-base :make-meta-base :add-fact-base! 
-	   :new-fact-base! :indices :fact-base-table
+	   :new-fact-base! :indices :list-bases :get-base
 
 	   :file-name :next-id!
 	   :lookup :select :matching? 
