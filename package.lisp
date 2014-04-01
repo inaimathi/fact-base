@@ -6,7 +6,11 @@
   (:import-from #:alexandria #:with-gensyms)
   (:import-from #:anaphora #:awhen #:aif #:it)
   (:export :fact-base :make-fact-base :current :history :delta :_
-	   :file-name :next-id! 
+
+	   :meta-base :make-meta-base :add-fact-base! 
+	   :new-fact-base! :indices :fact-base-table
+
+	   :file-name :next-id!
 	   :lookup :select :matching? 
 	   :multi-insert! :insert-new! :insert! :delete! 
 	   :index! :project! :project
