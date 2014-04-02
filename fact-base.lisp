@@ -154,7 +154,7 @@
   nil)
 
 (defmethod load! ((base-type (eql :fact-base)) (file-name pathname) &key (indices '(:a :b :c)))
-  (let ((res (make-fact-base :indices indices :file-name (file-namestring file-name))))
+  (let ((res (make-fact-base :indices indices :file-name file-name)))
     (multiple-value-bind (es id) (read! file-name)
       (setf (history res) (reverse es)
 	    (fact-id res) (+ id 1)))
