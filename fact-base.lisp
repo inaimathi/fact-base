@@ -143,7 +143,7 @@
 		  (_ 0)) into max-id
        finally (return (values es max-id)))))
 
-(defmethod read! ((file-name string) &key min-time max-time)
+(defmethod read! ((file-name pathname) &key min-time max-time)
   (when (cl-fad:file-exists-p file-name)
     (with-open-file (s file-name :direction :input)
       (read! s :min-time min-time :max-time max-time))))
@@ -153,8 +153,8 @@
   (map-insert! (current state) (index state))
   nil)
 
-(defmethod load! ((base-type (eql :fact-base)) (file-name string) &key (indices '(:a :b :c)))
-  (let ((res (make-fact-base :indices indices :file-name file-name)))
+(defmethod load! ((base-type (eql :fact-base)) (file-name pathname) &key (indices '(:a :b :c)))
+  (let ((res (make-fact-base :indices indices :file-name (file-namestring file-name))))
     (multiple-value-bind (es id) (read! file-name)
       (setf (history res) (reverse es)
 	    (fact-id res) (+ id 1)))

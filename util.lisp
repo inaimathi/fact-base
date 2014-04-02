@@ -1,7 +1,7 @@
 (in-package :fact-base)
 
 (defun temp-file-name ()
-  (let* ((f (cl-fad:open-temporary))
+  (let* ((f (cl-fad:open-temporary :template "TEMPORARY-FILES:BASE-%"))
 	 (fname (file-namestring (pathname f))))
     (close f)
     fname))

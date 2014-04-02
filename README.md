@@ -191,6 +191,7 @@
 
 ### Notes
 
+- file-name should have nothing to do with fact-base name; it should be the full path to a fact base. Its name should be the contents of the base-name fact
 - Define a structure other than a list to store history.
 	-Specifically, you want the ability to push to its end (since that's the only way we'll ever be doing it)
 - Infrastructure to support starting from a non-empty fact-base
