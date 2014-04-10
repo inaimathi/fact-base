@@ -10,5 +10,6 @@
 	       (:file "util")
 	       (:file "index")
                (:file "fact-base")
+	       (:file "unify")
 	       (:file "meta-base")))
 
