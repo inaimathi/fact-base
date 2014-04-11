@@ -33,9 +33,6 @@
 			(or (not c) (equal c (third f))))
 	      collect f)))))
 
-(defmethod select ((fn function) (lst list))
-  (loop for fact in lst when (funcall fn fact) collect fact))
-
 (defmethod insert ((state list) (fact list)) 
   (cons fact state))
 
@@ -63,9 +60,6 @@
        finally (return res))))
 
 ;;;;;;;;;; Fact-base specific
-(defmethod select ((fn function) (state fact-base))
-  (select fn (current state)))
-
 (defmethod project! ((state fact-base))
   (setf (current state) (project (reverse (history state)))))
 
@@ -75,7 +69,9 @@
      finally (return id)))
 
 (defmethod insert-new! ((state fact-base) b c)
-  (insert! state (list (next-id! state) b c)))
+  (let ((id (next-id! state)))
+    (insert! state (list id b c))
+    id))
 
 (defmethod insert! ((state fact-base) (fact list))
   (assert (and (cddr fact) (not (cdddr fact))) nil "INSERT! :: A fact is a list of length 3")

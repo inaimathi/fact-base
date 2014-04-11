@@ -11,7 +11,7 @@
 	   :new-fact-base! :indices :list-bases :get-base
 
 	   :file-name :next-id!
-	   :lookup :select :matching? 
+	   :for-all :lookup 
 	   :multi-insert! :insert-new! :insert! :delete! 
 	   :index! :project! :project :history-slice
 	   :write! :write-delta! :load!))
