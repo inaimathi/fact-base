@@ -193,11 +193,24 @@
 
 - Re-work for-all. It should be possible to translate it directly to some nested loops rather than going through the whole unification rigmarole.
 
+`(for-all (?id :time ?time) :in *base* :get (?id ?time))`
+=>
+`(loop for (?id b ?time) in (lookup *base* :b :time) collect (list ?id ?time))`
+
+
 `(for-all (and (?id :time ?time) (?id :number 62)) :in *base* :get (?id ?time))`
 =>
 `(loop for (?id b ?time) in (lookup *base* :b :time)
        append (loop for (c d e) in (lookup *base* :a ?id :b :number :c 62)
                     collect (list ?id ?time)))`
+
+
+`(for-all (and (?id :time ?time) (?id :number 62) (?id :user ?user)) :in *base* :get ?user)`
+=>
+`(loop for (?id a ?time) in (lookup *base*) :b :time
+       append (loop for (c d e) in (lookup *base* :a ?id :b :number :c 62)
+	                append (loop for (f g ?user) in (lookup *base* :a ?id :b :user)
+					             collect ?user)))`
 
 Except with gensyms in strategic places, obviously
 
