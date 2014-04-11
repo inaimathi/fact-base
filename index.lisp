@@ -1,8 +1,5 @@
 (in-package #:fact-base)
 
-(defclass index ()
-  ((table :reader table :initform (make-hash-table :test 'equal))))
-
 (defun make-index (indices)
   (let ((index (make-instance 'index)))
     (loop for ix in indices
@@ -13,25 +10,29 @@
 (defmethod indexed? ((state index) (ix-type symbol))
   (gethash ix-type (table state)))
 
-(defun decide-index (&optional a b c)
-  (cond ((and a b c) (list :abc a b c))
-	((and a b) (list :ab a b))
-	((and a c) (list :ac a c))
-	((and b c) (list :bc b c))
-	((and a) (list :a a))
-	((and b) (list :b b))
-	((and c) (list :c c))))
+(defmacro lookup-index (state &rest indices)
+  (with-gensyms (st)
+    `(let ((,st ,state))
+       (cond ,@(loop for i in indices 
+		  for syms = (key->symbols i)
+		  collect `((and (indexed? (index ,st) ,i)
+				 ,@syms)
+			    (list ,i ,@syms)))))))
+
+(defmethod decide-index ((state fact-base) &optional a b c)
+  (lookup-index state :abc :ab :ac :bc :a :b :c))
+
+(defmacro index-case (ix-type fact &rest indices)
+  `(destructuring-bind (a b c) ,fact
+     (case ,ix-type
+       ,@(loop for i in indices
+	    for syms = (key->symbols i)
+	    collect `(,i (list ,@syms))))))
 
 (defmethod format-index ((ix-type symbol) (fact list))
-  (destructuring-bind (a b c) fact
-    (case ix-type
-      (:abc (list a b c))
-      (:ab (list a b))
-      (:ac (list a c))
-      (:bc (list b c))
-      (:a (list a))
-      (:b (list b))
-      (:c (list c)))))
+  (index-case 
+   ix-type fact
+   :abc :ab :ac :bc :a :b :c))
 
 (defmethod map-insert! ((state index) (facts list))
   (dolist (f facts) (insert! state f)))

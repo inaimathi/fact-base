@@ -1,6 +1,9 @@
 ;;;; fact-base.lisp
 (in-package #:fact-base)
 
+(defclass index ()
+  ((table :reader table :initform (make-hash-table :test 'equal))))
+
 (defclass fact-base ()
   ((file-name :reader file-name :initarg :file-name)
    (fact-id :accessor fact-id :initform 0)
@@ -19,19 +22,16 @@
     res))
 
 (defmethod lookup ((state fact-base) &key a b c)
-  (let ((ixs (decide-index a b c)))
-    (cond ((not ixs)
-	   (format t "No indices provided, returning current fact base...%")
-	   (current state))
-	  ((indexed? (index state) (first ixs))
-	   (gethash (rest ixs) (gethash (first ixs) (table (index state)))))
-	  (t
-	   (format t "No relevant index found, traversing...~%")
-	   (loop for f in (current state)
-	      when (and (or (not a) (equal a (first f)))
-			(or (not b) (equal b (second f)))
-			(or (not c) (equal c (third f))))
-	      collect f)))))
+  (if (every #'not (list a b c))
+      (current state)
+      (let ((ix (aif (decide-index state a b c)
+		     (gethash (rest it) (gethash (first it) (table (index state))))
+		     (current state))))
+	(loop for f in ix
+	   when (and (or (not a) (equal a (first f)))
+		     (or (not b) (equal b (second f)))
+		     (or (not c) (equal c (third f))))
+	   collect f))))
 
 (defmethod insert ((state list) (fact list)) 
   (cons fact state))

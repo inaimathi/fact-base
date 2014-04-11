@@ -23,3 +23,7 @@
     (loop for (k v) on k/v-pairs by #'cddr
        do (setf (gethash k hash) v))
     hash))
+
+(defmethod key->symbols ((keyword symbol))
+  (mapcar (lambda (c) (intern (coerce (list c) 'string)))
+	  (coerce (symbol-name keyword) 'list)))

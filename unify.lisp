@@ -1,6 +1,7 @@
 (in-package :fact-base)
+(declaim (inline fail? fail variable? get-binding))
 
-;;; Mostly ripped bleeding from PAIP. It's certainly worth a read.
+;;; Mostly ripped bleeding from PAIP.
 
 ;;;;; Basics
 (defvar +fail+ nil)
@@ -105,26 +106,21 @@
 	 else if (variable? e) do (return t)
 	 finally (return nil))))
 
-(defmacro no-vars-in? (&rest terms)
-  `(and ,@(loop for tr in terms
-	     collect `(not (any-variables? ,tr)))))
+(defmacro unify-index-case (goal state &rest indices)
+  (with-gensyms (st)
+    `(let ((,st ,state))
+       (destructuring-bind (a b c) ,goal
+	 (cond ,@(loop for i in indices
+		    for syms = (key->symbols i)
+		    collect `((and (indexed? ,st ,i)
+				   ,@(loop for s in syms
+					collect `(not (any-variables? ,s))))
+			      (list ,i ,@syms))))))))
 
 (defmethod use-index? (goal (state index))
-  (destructuring-bind (a b c) goal
-    (cond ((and (indexed? state :abc) (no-vars-in? a b c))
-	   (list :abc a b c)) 
-	  ((and (indexed? state :ab) (no-vars-in? a b))
-	   (list :ab a b))
-	  ((and (indexed? state :ac) (no-vars-in? a c)) 
-	   (list :ac a c))
-	  ((and (indexed? state :bc) (no-vars-in? b c))
-	   (list :bc b c))
-	  ((and (indexed? state :a) (no-vars-in? a))
-	   (list :a a))
-	  ((and (indexed? state :b) (no-vars-in? b))
-	   (list :b b))
-	  ((and (indexed? state :c) (no-vars-in? c))
-	   (list :c c)))))
+  (unify-index-case 
+   goal state
+   :abc :ab :ac :bc :a :b :c))
 
 (defmethod match-single (goal bindings (facts fact-base))
   (match-single 
@@ -196,12 +192,3 @@
 				  `(apply (lambda ,(variables-in apply) ,apply)
 					  (subst-bindings ,res ',(variables-in apply)))
 				  `(subst-bindings ,res ,template))))))
-
-;;;;; Test data
-(defparameter *base* (make-fact-base))
-(insert! *base* (list 0 :message "This is a sample message"))
-(insert! *base* (list 1 :message "This is another one"))
-(insert! *base* (list 1 :author "Inaimathi"))
-(insert! *base* (list 2 :message "That second one was written by me. This one is a meta-message (also by me)."))
-(insert! *base* (list 2 :author "Inaimathi"))
-(insert! *base* (list 2 :type :meta))
