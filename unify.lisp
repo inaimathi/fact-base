@@ -1,5 +1,5 @@
 (in-package :fact-base)
-(declaim (inline fail? fail variable? get-binding))
+(declaim (inline fail? fail variable? get-binding bining-val get-bind-val))
 
 ;;; Mostly ripped bleeding from PAIP.
 

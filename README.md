@@ -191,6 +191,16 @@
 
 ### Notes
 
+- Re-work for-all. It should be possible to translate it directly to some nested loops rather than going through the whole unification rigmarole.
+
+`(for-all (and (?id :time ?time) (?id :number 62)) :in *base* :get (?id ?time))`
+=>
+`(loop for (?id b ?time) in (lookup *base* :b :time)
+       append (loop for (c d e) in (lookup *base* :a ?id :b :number :c 62)
+                    collect (list ?id ?time)))`
+
+Except with gensyms in strategic places, obviously
+
 - Define a structure other than a list to store history.
 	-Specifically, you want the ability to push to its end (since that's the only way we'll ever be doing it)
 - Infrastructure to support starting from a non-empty fact-base
