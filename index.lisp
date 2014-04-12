@@ -11,13 +11,17 @@
   (gethash ix-type (table state)))
 
 (defmacro lookup-index (state &rest indices)
-  (with-gensyms (st)
-    `(let ((,st ,state))
-       (cond ,@(loop for i in indices 
-		  for syms = (key->symbols i)
-		  collect `((and (indexed? (index ,st) ,i)
-				 ,@syms)
-			    (list ,i ,@syms)))))))
+  (with-gensyms (ix ideal applicable?)
+    `(let ((,ix (index ,state))
+	   (,ideal))
+       ,@(loop for i in indices 
+	    for syms = (key->symbols i)
+	    collect `(let ((,applicable? (and ,@syms)))
+		       (when (and (null ,ideal) ,applicable?) (setf ,ideal ,i))
+		       (when (and (indexed? ,ix ,i) ,applicable?)
+			 (return-from decide-index 
+			   (values (list ,i ,@syms) ,ideal)))))
+       (values nil ,ideal))))
 
 (defmethod decide-index ((state fact-base) &optional a b c)
   (lookup-index state :abc :ab :ac :bc :a :b :c))

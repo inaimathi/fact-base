@@ -63,12 +63,6 @@
 	       :b ,(->ix b)
 	       :c ,(->ix c)))))
 
-(defun goal->or-expression (a b c goal)
-  (flet ((test (term elem) `(equal ,term ,elem)))
-    `(and ,(test a (first goal))
-	  ,(test b (second goal))
-	  ,(test c (third goal)))))
-
 (defmethod handle-goals ((goal-type (eql 'and)) base goals collecting)
   (let ((bindings (make-hash-table)))
     (labels ((single-goal (destruct lookup tail)
@@ -92,8 +86,8 @@
 	 (destruct (goal->destructuring-form goals :bindings bindings)))
     `(loop for ,destruct in ,lookup collect ,collecting)))
 
-(defmacro for-all (goal-term &key in get)
+(defmacro for-all (goal-term &key in collecting)
   (with-gensyms (base)
-    (let ((template (replace-anonymous (or get `(list ,@(variables-in goal-term))))))
+    (let ((template (replace-anonymous (or collecting `(list ,@(variables-in goal-term))))))
       `(let ((,base ,in))
 	 ,(handle-goals (first goal-term) base goal-term template)))))

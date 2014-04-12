@@ -24,14 +24,17 @@
 (defmethod lookup ((state fact-base) &key a b c)
   (if (every #'not (list a b c))
       (current state)
-      (let ((ix (aif (decide-index state a b c)
-		     (gethash (rest it) (gethash (first it) (table (index state))))
-		     (current state))))
-	(loop for f in ix
-	   when (and (or (not a) (equal a (first f)))
-		     (or (not b) (equal b (second f)))
-		     (or (not c) (equal c (third f))))
-	   collect f))))
+      (multiple-value-bind (index ideal-index) (decide-index state a b c)
+	(let ((ix (if index
+		      (gethash (rest index) (gethash (first index) (table (index state))))
+		      (current state))))
+	  (if (and index (eq (first index) ideal-index))
+	      ix
+	      (loop for f in ix
+		 when (and (or (not a) (equal a (first f)))
+			   (or (not b) (equal b (second f)))
+			   (or (not c) (equal c (third f))))
+		 collect f))))))
 
 (defmethod insert ((state list) (fact list)) 
   (cons fact state))

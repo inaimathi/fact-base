@@ -23,4 +23,4 @@
 
 (test-generate! 10000)
 
-(for-all (and (?id :number 62) (?id :user ?name)) :in *base* :get ?name)
+(for-all (and (?id :number 62) (?id :user ?name)) :in *base* :collecting ?name)
