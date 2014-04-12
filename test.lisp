@@ -6,13 +6,13 @@
 (insert! *base* (list 0 :whiskey :tango))
 (insert! *base* (list 4 :tango :beta))
 (insert! *base* (list 0 :b :c))
-(show (index *base*))
+;; (show (index *base*))
 (lookup *base* :a 0)
 (lookup *base* :a 0 :b :whiskey)
 (delete! *base* (list 0 :whiskey :tango))
-(show (index *base*))
+;; (show (index *base*))
 (delete! *base* (list 0 :b :c))
-(show (index *base*))
+;; (show (index *base*))
 
 (defmethod test-generate! (n)
   (loop repeat n
@@ -20,3 +20,7 @@
 	 *base* `((:number ,(random 100)) (:type :digit) 
 		  (:time ,(get-universal-time)) 
 		  (:user ,(nth (random 4) '("Inaimathi" "Anon" "Someone Else" "Albert" "Beatrice" "Charles" "Daria")))))))
+
+(test-generate! 10000)
+
+(for-all (and (?id :number 62) (?id :user ?name)) :in *base* :get ?name)

@@ -1,83 +1,12 @@
 (in-package :fact-base)
-(declaim (inline fail? fail variable? get-binding bining-val get-bind-val))
 
-;;; Mostly ripped bleeding from PAIP.
+;;; Some contents ripped bleeding from PAIP.
+;;; http://norvig.com/paip/README.html
+;;; Minor alterations are present.
 
-;;;;; Basics
-(defvar +fail+ nil)
-(defvar +succeed+ '((t . t)))
-
-(defun fail? (thing) (eq thing +fail+))
-(defun fail () +fail+)
-
-;;;;; Bindings/variables
 (defun variable? (thing)
   (and (symbolp thing) (eql #\? (char (symbol-name thing) 0))))
 
-(defun get-binding (var bindings)
-  (assoc var bindings))
-
-(defun binding-val (binding)
-  (cdr binding))
-
-(defun get-bind-val (var bindings)
-  (binding-val (get-binding var bindings)))
-
-(defun extend-bindings (var val bindings)
-  (cons (cons var val)
-	(if (eq bindings +succeed+)
-	    nil
-	    bindings)))
-
-(defun match-variable (var input bindings)
-  (let ((b (get-binding var bindings)))
-    (cond ((not b) (extend-bindings var input bindings))
-	  ((equal input (binding-val b)) bindings)
-	  (t (fail)))))
-
-;;;;; Unification
-(defun occurs-check (var x bindings)
-  (cond ((eq var x) t)
-	((and (variable? x) (get-binding x bindings))
-	 (occurs-check var (get-bind-val x bindings) bindings))
-	((consp x) (or (occurs-check var (first x) bindings)
-		       (occurs-check var (rest x) bindings)))
-	(t nil)))
-
-(defun unify-variable (var x bindings &optional occurs-check?)
-  (cond ((get-binding var bindings)
-	 (unify (get-bind-val var bindings) x bindings))
-	((and (variable? x) (get-binding x bindings))
-	 (unify var (get-bind-val x bindings) bindings))
-	((and occurs-check? (occurs-check var x bindings))
-	 (fail))
-	(t (extend-bindings var x bindings))))
-
-(defun unify (x y &optional (bindings +succeed+))
-  (cond ((fail? bindings) (fail))
-	((eql x y) bindings)
-	((and (stringp x) (stringp y) (string= x y))
-	 bindings)
-	((variable? x) (unify-variable x y bindings))
-	((variable? y) (unify-variable y x bindings))
-	((and (consp x) (consp y))
-	 (unify (rest x) (rest y)
-		(unify (first x) (first y) bindings)))
-	(t (fail))))
-
-(defun subst-bindings (bindings x)
-  (cond ((fail? bindings) (fail))
-	((eq bindings +succeed+) x)
-	((and (variable? x) (get-binding x bindings))
-	 (subst-bindings bindings (get-bind-val x bindings)))
-	((atom x) x)
-	(t (cons (subst-bindings bindings (first x))
-		 (subst-bindings bindings (rest x))))))
-
-(defun unifier (x y)
-  (subst-bindings (unify x y) x))
-
-;;;;; Traverses
 (defun unique-find-anywhere-if (predicate tree &optional found-so-far)
   (if (atom tree)
       (if (funcall predicate tree)
@@ -106,89 +35,65 @@
 	 else if (variable? e) do (return t)
 	 finally (return nil))))
 
-(defmacro unify-index-case (goal state &rest indices)
-  (with-gensyms (st)
-    `(let ((,st ,state))
-       (destructuring-bind (a b c) ,goal
-	 (cond ,@(loop for i in indices
-		    for syms = (key->symbols i)
-		    collect `((and (indexed? ,st ,i)
-				   ,@(loop for s in syms
-					collect `(not (any-variables? ,s))))
-			      (list ,i ,@syms))))))))
+(defun goal->destructuring-form (goal &key (bindings (make-hash-table)))
+  (labels ((rec (elem)
+	     (cond ((listp elem)
+		    (mapcar #'rec elem))
+		   ((or (eq '? elem) (not (variable? elem)))
+		    (gensym))
+		   ((and (variable? elem) (gethash elem bindings))
+		    (gensym))
+		   ((variable? elem)
+		    (setf (gethash elem bindings) t)
+		    elem)
+		   (t (error "Somethings' up. goal->destructuring-form~%     ~s~%     ~s~%     ~s"
+			     bindings goal elem)))))
+    (mapcar #'rec goal)))
 
-(defmethod use-index? (goal (state index))
-  (unify-index-case 
-   goal state
-   :abc :ab :ac :bc :a :b :c))
+(defun goal->lookup (base goal &key (bindings (make-hash-table)))
+  (flet ((->ix (elem)
+	   (cond ((and (variable? elem) (gethash elem bindings))
+		  elem)
+		 ((any-variables? elem)
+		  nil)
+		 (t elem))))
+    (destructuring-bind (a b c) goal
+      `(lookup ,base 
+	       :a ,(->ix a) 
+	       :b ,(->ix b)
+	       :c ,(->ix c)))))
 
-(defmethod match-single (goal bindings (facts fact-base))
-  (match-single 
-   goal bindings 
-   (let ((ix (use-index? goal (index facts))))
-     (if ix
-	 (gethash (rest ix) (gethash (first ix) (table (index facts))))
-	 (current facts)))))
+(defun goal->or-expression (a b c goal)
+  (flet ((test (term elem) `(equal ,term ,elem)))
+    `(and ,(test a (first goal))
+	  ,(test b (second goal))
+	  ,(test c (third goal)))))
 
-(defmethod match-single (goal bindings (facts list))
-  (let ((fs facts))
-    (lambda ()
-      (loop for res = (unify goal (pop fs) bindings)
-	 unless (fail? res) do (return res)
-	 while fs
-	 finally (return (fail))))))
+(defmethod handle-goals ((goal-type (eql 'and)) base goals collecting)
+  (let ((bindings (make-hash-table)))
+    (labels ((single-goal (destruct lookup tail)
+	       `(loop for ,destruct in ,lookup ,@tail))
+	     (rec (goals)
+	       ;; We want to generate the lookups first, because the bindings are going to be generated
+	       ;; from the result of the lookup. Meaning, if the bindings are established in a given destruct clause,
+	       ;; they won't be usable until the NEXT lookup. 
+	       ;; Therefore, even though it isn't immediately obvious, order matters in this let* form
+	       (let* ((lookup (goal->lookup base (first goals) :bindings bindings))
+		      (destruct (goal->destructuring-form (first goals) :bindings bindings)))
+		 (if (null (cdr goals))
+		     (single-goal destruct lookup `(collect ,collecting))
+		     (single-goal destruct lookup `(append ,(rec (rest goals))))))))
+      (rec (rest goals)))))
 
-(defmethod match-ors (goals bindings (facts fact-base))
-  (let ((fs facts))
-    (flet ((try-goals (f)
-	     (loop for g in goals 
-		for res = (unify g f bindings) when res do (return res)
-		finally (return (fail)))))
-      (lambda ()
-	(loop for res = (try-goals (pop fs))
-	   unless (fail? res) do (return res)
-	   while fs
-	   finally (return (fail)))))))
+(defmethod handle-goals (goal-type base goals collecting)
+  ;; Same story here as in handle-goals
+  (let* ((bindings (make-hash-table))
+	 (lookup (goal->lookup base goals :bindings bindings))
+	 (destruct (goal->destructuring-form goals :bindings bindings)))
+    `(loop for ,destruct in ,lookup collect ,collecting)))
 
-(defmethod match-ands (goals bindings (facts fact-base))
-  (let ((generator (match-single (first goals) bindings facts))
-	(rest-generator))
-    (if (null (cdr goals))
-	generator
-	(labels ((next-gen ()
-		   (let ((res (funcall generator)))
-		     (if (fail? res)
-			 (fail)
-			 (setf rest-generator (match-ands (rest goals) res facts)))))
-		 (backtrack! ()
-		   (if (fail? (next-gen))
-		       (fail)
-		       (next)))
-		 (next ()
-		   (if (null rest-generator)
-		       (backtrack!)
-		       (let ((res (funcall rest-generator)))
-			 (if (fail? res)
-			     (backtrack!)
-			     res)))))
-	  #'next))))
-
-(defmacro for-all (goal-term &key in get apply)
-  (assert in nil "Need a database to query...")
-  (when (and get apply)
-    (format t ":apply and :get arguments passed in; ignoring :get"))
-  (with-gensyms (template gen res facts)
-    `(let* ((,facts ,in)
-	    (,gen ,(cond ((eq 'and (car goal-term))
-			  `(match-ands ',(replace-anonymous (rest goal-term)) +succeed+ ,facts))
-			 ((eq 'or (car goal-term))
-			  `(match-ors ',(replace-anonymous (rest goal-term)) +succeed+ ,facts))
-			 (t
-			  `(match-single ',goal-term +succeed+ ,facts))))
-	    ,@(unless apply
-	      `((,template ',(replace-anonymous (or get goal-term))))))
-       (loop for ,res = (funcall ,gen)
-	  while ,res collect ,(if apply
-				  `(apply (lambda ,(variables-in apply) ,apply)
-					  (subst-bindings ,res ',(variables-in apply)))
-				  `(subst-bindings ,res ,template))))))
+(defmacro for-all (goal-term &key in get)
+  (with-gensyms (base)
+    (let ((template (replace-anonymous (or get `(list ,@(variables-in goal-term))))))
+      `(let ((,base ,in))
+	 ,(handle-goals (first goal-term) base goal-term template)))))
