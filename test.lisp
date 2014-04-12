@@ -19,7 +19,7 @@
      do (multi-insert! 
 	 *base* `((:number ,(random 100)) (:type :digit) 
 		  (:time ,(get-universal-time)) 
-		  (:user ,(nth (random 4) '("Inaimathi" "Anon" "Someone Else" "Albert" "Beatrice" "Charles" "Daria")))))))
+		  (:user ,(nth (random 7) '("Inaimathi" "Anon" "Someone Else" "Albert" "Beatrice" "Charles" "Daria")))))))
 
 (test-generate! 10000)
 
