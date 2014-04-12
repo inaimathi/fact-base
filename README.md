@@ -214,6 +214,7 @@
 
 Except with gensyms in strategic places, obviously
 
+- Add :meta tag for history entries (just a list of keywords to be stored along with regular facts for later reporting purposes)
 - Define a structure other than a list to store history.
 	-Specifically, you want the ability to push to its end (since that's the only way we'll ever be doing it)
 - Infrastructure to support starting from a non-empty fact-base
