@@ -191,36 +191,7 @@
 
 ### Notes
 
-- Re-work for-all. It should be possible to translate it directly to some nested loops rather than going through the whole unification rigmarole.
+- No, we're not going to implement `:initial`. Compressing stuff on disk would be a better approach than cutting history when you need to branch, and it would let us defer decisions about internal fact-base projection formats (specifically as pertains to the next note)
 
-`(for-all (?id :time ?time) :in *base* :get (?id ?time))`
-=>
-`(loop for (?id b ?time) in (lookup *base* :b :time) collect (list ?id ?time))`
-
-
-`(for-all (and (?id :time ?time) (?id :number 62)) :in *base* :get (?id ?time))`
-=>
-`(loop for (?id b ?time) in (lookup *base* :b :time)
-       append (loop for (c d e) in (lookup *base* :a ?id :b :number :c 62)
-                    collect (list ?id ?time)))`
-
-
-`(for-all (and (?id :time ?time) (?id :number 62) (?id :user ?user)) :in *base* :get ?user)`
-=>
-`(loop for (?id a ?time) in (lookup *base*) :b :time
-       append (loop for (c d e) in (lookup *base* :a ?id :b :number :c 62)
-	                append (loop for (f g ?user) in (lookup *base* :a ?id :b :user)
-					             collect ?user)))`
-
-Except with gensyms in strategic places, obviously
-
-- Add :meta tag for history entries (just a list of keywords to be stored along with regular facts for later reporting purposes)
 - Define a structure other than a list to store history.
 	-Specifically, you want the ability to push to its end (since that's the only way we'll ever be doing it)
-- Infrastructure to support starting from a non-empty fact-base
-	- Could be useful for reducing memory use at the expense of history granularity
-	- How much will it actually save?
-	- This would require a separation of fact-bases and deltas (which we should probably have anyhow)
-		- No, it wouldn't. You'd need a history label that looked like `(<timestamp> :initial <initial-fb>)`
-		- That could then get processed by `load!` and similar, and ignored when we're applying deltas, or when they don't appear at the beginning of a fact-base file
-	- This is a tough decision. On the one hand, I don't want there to be gigabyte-large files for no reason (and I suspect keeping *all* history forever is a bit of overkill for most practical uses), but on the other hand, the only way to prevent that in general seems to be history pruning. Once history is mutable, we don't have very many strong guarantees left about anything. For the moment, leave as is. If it turns out that FBs are fucking huge, I'll revisit this.
