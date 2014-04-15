@@ -152,7 +152,7 @@
   (map-insert! (current state) (index state))
   nil)
 
-(defmethod load! ((base-type (eql :fact-base)) (file-name pathname) &key (indices '(:a :b :c)))
+(defmethod load! ((file-name pathname) &key (indices '(:a :b :c)))
   (let ((res (make-fact-base :indices indices :file-name file-name)))
     (multiple-value-bind (es id) (read! file-name)
       (setf (history res) (reverse es)
