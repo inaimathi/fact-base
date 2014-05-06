@@ -77,7 +77,7 @@
     id))
 
 (defmethod insert! ((state fact-base) (fact list))
-  (assert (and (cddr fact) (not (cdddr fact))) nil "INSERT! :: A fact is a list of length 3")
+  (assert (and (cddr fact) (not (cdddr fact))) nil "INSERT! :: A fact is a list of length 3: ~s" fact)
   (let ((time (local-time:now))
 	(id (first fact)))
     (when (>= id (fact-id state)) (setf (fact-id state) (+ 1 id)))
@@ -89,7 +89,7 @@
     nil))
 
 (defmethod delete! ((state fact-base) (fact list))
-  (assert (and (cddr fact) (not (cdddr fact))) nil "DELETE! :: A fact is a list of length 3")
+  (assert (and (cddr fact) (not (cdddr fact))) nil "DELETE! :: A fact is a list of length 3: ~s" fact)
   (setf (current state) (delete (current state) fact))
   (let ((h (list (local-time:now) :delete fact)))
     (push h (history state))
