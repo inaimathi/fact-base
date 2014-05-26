@@ -63,7 +63,7 @@
 	       :b ,(->ix b)
 	       :c ,(->ix c)))))
 
-(defmethod handle-goals ((goal-type (eql 'and)) base goals collecting)
+(defmethod handle-goals ((goal-type (eql 'and)) base goals collecting loop-clause)
   (let ((bindings (make-hash-table)))
     (labels ((single-goal (destruct lookup tail)
 	       `(loop for ,destruct in ,lookup ,@tail))
@@ -75,19 +75,26 @@
 	       (let* ((lookup (goal->lookup base (first goals) :bindings bindings))
 		      (destruct (goal->destructuring-form (first goals) :bindings bindings)))
 		 (if (null (cdr goals))
-		     (single-goal destruct lookup `(collect ,collecting))
-		     (single-goal destruct lookup `(append ,(rec (rest goals))))))))
+		     (single-goal destruct lookup `(,loop-clause ,collecting))
+		     (single-goal destruct lookup `(,(case loop-clause
+						      (do 'do)
+						      (collect 'append)) ,(rec (rest goals))))))))
       (rec (rest goals)))))
 
-(defmethod handle-goals (goal-type base goals collecting)
+(defmethod handle-goals (goal-type base goals collecting loop-clause)
   ;; Same story here as in handle-goals
   (let* ((bindings (make-hash-table))
 	 (lookup (goal->lookup base goals :bindings bindings))
 	 (destruct (goal->destructuring-form goals :bindings bindings)))
-    `(loop for ,destruct in ,lookup collect ,collecting)))
+    `(loop for ,destruct in ,lookup ,loop-clause ,collecting)))
 
-(defmacro for-all (goal-term &key in collecting)
+(defmacro for-all (goal-term &key in collect do)
+  (assert (or (and collect (not do))
+	      (and do (not collect))
+	      (and (not collect) (not do))))
   (with-gensyms (base)
-    (let ((template (replace-anonymous (or collecting `(list ,@(variables-in goal-term))))))
+    (let ((template (replace-anonymous (or collect do `(list ,@(variables-in goal-term))))))
       `(let ((,base ,in))
-	 ,(handle-goals (first goal-term) base goal-term template)))))
+	 ,(handle-goals (first goal-term) base goal-term template
+			(cond (collect 'collect)
+			      (do 'do)))))))
