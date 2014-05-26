@@ -77,8 +77,8 @@
 		 (if (null (cdr goals))
 		     (single-goal destruct lookup `(,loop-clause ,collecting))
 		     (single-goal destruct lookup `(,(case loop-clause
-						      (do 'do)
-						      (collect 'append)) ,(rec (rest goals))))))))
+						      (collect 'append)
+						      (do 'do)) ,(rec (rest goals))))))))
       (rec (rest goals)))))
 
 (defmethod handle-goals (goal-type base goals collecting loop-clause)
@@ -96,5 +96,5 @@
     (let ((template (replace-anonymous (or collect do `(list ,@(variables-in goal-term))))))
       `(let ((,base ,in))
 	 ,(handle-goals (first goal-term) base goal-term template
-			(cond (collect 'collect)
-			      (do 'do)))))))
+			(cond (do 'do)
+			      (t 'collect)))))))
