@@ -58,7 +58,7 @@
 		(match entry
 		  ((list _ :insert fact)
 		   (insert res fact))
-		  ((list _ :change (fact-a fact-b))
+		  ((list _ :change (list fact-a fact-b))
 		   (insert (delete res fact-a) fact-b))
 		  ((list _ :delete fact)
 		   (delete res fact))))
@@ -152,6 +152,7 @@
        when (funcall range-fn entry) collect entry into es
        maximize (match entry
 		  ((list _ :insert (list id _ _)) id)
+		  ((list _ :change (list id _ _)) id)
 		  (_ 0)) into max-id
        finally (return (values es max-id)))))
 

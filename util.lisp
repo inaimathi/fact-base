@@ -1,7 +1,7 @@
 (in-package :fact-base)
 
 (defmethod fact-p (fact) nil)
-(defmethod fact-p ((fact list)) (and (cddr fact) (not cddr fact)))
+(defmethod fact-p ((fact list)) (and (cddr fact) (not (cdddr fact))))
 
 (defun temp-file-name ()
   (let* ((f (cl-fad:open-temporary :template "TEMPORARY-FILES:BASE-%"))
