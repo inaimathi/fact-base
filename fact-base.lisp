@@ -7,10 +7,10 @@
 (defclass fact-base ()
   ((file-name :reader file-name :initarg :file-name)
    (fact-id :accessor fact-id :initform 0)
-   (delta :accessor delta :initform nil)
+   (delta :accessor delta :initform (queue))
    (current :accessor current :initform nil)
    (index :accessor index :initarg :index)
-   (history :accessor history :initform nil)))
+   (history :accessor history :initform (queue))))
 
 (defun make-fact-base (&key (indices '(:a :b :c)) (file-name (temp-file-name)))
   (make-instance 'fact-base :index (make-index indices) :file-name file-name))
@@ -66,7 +66,7 @@
 
 ;;;;;;;;;; Fact-base specific
 (defmethod project! ((state fact-base))
-  (setf (current state) (project (reverse (history state)))))
+  (setf (current state) (project (entries (history state)))))
 
 (defmethod multi-insert! ((state fact-base) (b/c-pairs list))
   (loop with id = (next-id! state)
@@ -84,8 +84,8 @@
 	(id (first fact)))
     (when (>= id (fact-id state)) (setf (fact-id state) (+ 1 id)))
     (let ((h (list time :insert fact)))
-      (push h (history state))
-      (push h (delta state)))
+      (push! h (history state))
+      (push! h (delta state)))
     (insert! (index state) fact)
     (push fact (current state))
     nil))
@@ -95,8 +95,8 @@
   (assert (fact-p new) nil "CHANGE! [new] :: A fact is a list of length 3: ~s" new)
   (setf (current state) (insert (delete (current state) old) new))
   (let ((h (list (local-time:now) :change (list old new))))
-    (push h (history state))
-    (push h (delta state)))
+    (push! h (history state))
+    (push! h (delta state)))
   (delete! (index state) old)
   (insert! (index state) new)
   nil)
@@ -105,8 +105,8 @@
   (assert (fact-p fact) nil "DELETE! :: A fact is a list of length 3: ~s" fact)
   (setf (current state) (delete (current state) fact))
   (let ((h (list (local-time:now) :delete fact)))
-    (push h (history state))
-    (push h (delta state)))
+    (push! h (history state))
+    (push! h (delta state)))
   (delete! (index state) fact)
   nil)
 
@@ -128,7 +128,7 @@
 
 (defmethod write-entries! ((entries list) (file pathname) if-exists)
   (with-open-file (s file :direction :output :if-exists if-exists :if-does-not-exist :create)
-    (dolist (entry (reverse entries))
+    (dolist (entry entries)
       (write-entry! entry s))))
 
 (defmethod write-entries! ((entries list) (file string) if-exists)
@@ -136,14 +136,14 @@
 
 (defmethod write-delta! ((state fact-base) &key (file-name (file-name state)) (zero-delta? t))
   (ensure-directories-exist file-name)
-  (write-entries! (delta state) file-name :append)
-  (when zero-delta? (setf (delta state) nil))
+  (write-entries! (entries (delta state)) file-name :append)
+  (when zero-delta? (setf (delta state) (queue)))
   file-name)
 
 (defmethod write! ((state fact-base) &key (file-name (file-name state)) (zero-delta? t))
   (ensure-directories-exist file-name)
-  (write-entries! (history state) file-name :supersede)
-  (when zero-delta? (setf (delta state) nil))
+  (write-entries! (entries (history state)) file-name :supersede)
+  (when zero-delta? (setf (delta state) (queue)))
   file-name)
 
 (defmethod read! ((s stream) &key min-time max-time)
@@ -169,7 +169,7 @@
 (defmethod load! ((file-name pathname) &key (indices '(:a :b :c)))
   (let ((res (make-fact-base :indices indices :file-name file-name)))
     (multiple-value-bind (es id) (read! file-name)
-      (setf (history res) (reverse es)
+      (setf (history res) (queue es)
 	    (fact-id res) (+ id 1)))
     (project! res)
     (map-insert! (index res) (current res))

@@ -8,6 +8,7 @@
   :depends-on (#:alexandria #:anaphora #:local-time #:optima #:cl-fad)
   :components ((:file "package")
 	       (:file "util")
+	       (:file "queue")
 	       (:file "fact-base")
                (:file "index")
 	       (:file "unify")))
