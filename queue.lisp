@@ -2,10 +2,10 @@
 
 (defclass queue ()
   ((entries :accessor entries :initform nil :initarg :entries)
-   (last-cons :accessor last-cons :initform nil)))
+   (last-cons :accessor last-cons :initform nil :initarg :last-cons)))
 
 (defun queue (&optional elems) 
-  (make-instance 'queue :entries elems))
+  (make-instance 'queue :entries elems :last-cons (when elems (last elems))))
 
 (defmethod push! (entry (q queue))
   (let ((entry (list entry)))
