@@ -3,6 +3,9 @@
 (defmethod fact-p (fact) nil)
 (defmethod fact-p ((fact list)) (and (cddr fact) (not (cdddr fact))))
 
+(defmethod ->key ((thing symbol))
+  (intern (symbol-name thing) :keyword))
+
 (defun temp-file-name ()
   (let* ((f (cl-fad:open-temporary :template "TEMPORARY-FILES:BASE-%"))
 	 (fname (file-namestring (pathname f))))

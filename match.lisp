@@ -85,13 +85,13 @@
 	       :b ,(->ix b)
 	       :c ,(->ix c)))))
 
-(defmethod handle-goals ((goal-type (eql 'and)) base goals collecting loop-clause)
+(defmethod handle-goals ((goal-type (eql :and)) loop-clause base goals collecting)
   (let ((bindings (make-hash-table)))
     (labels ((single-goal (destruct lookup loop-clause tail)
 	       (with-gensyms (fact res)
 		 `(loop for ,fact in ,lookup 
 		     for ,res = (match ,fact (,destruct ,(or tail fact)))
-		       ,@(unless (eq loop-clause 'do) `(when ,res ,loop-clause ,res)))))
+		       ,@(unless (eq loop-clause :do) `(when ,res ,loop-clause ,res)))))
 	     (rec (goals)
 	       ;; We want to generate the lookups first, because the bindings are going to be generated
 	       ;; from the result of the lookup. Meaning, if the bindings are established in a given destruct clause,
@@ -103,35 +103,43 @@
 		     (single-goal destruct lookup loop-clause collecting)
 		     (single-goal destruct lookup 
 				  (case loop-clause
-				    (collect 'append)
-				    (do 'do))
+				    (:collect 'append)
+				    (:do 'do))
 				  (rec (rest goals)))))))
       (rec (rest goals)))))
 
-(defmethod handle-goals ((goal-type (eql 'or)) base goals collecting loop-clause)
+(defmethod handle-goals ((goal-type (eql :or)) (loop-clause (eql :collect)) base goals collecting)
   (with-gensyms (fact res)
     `(loop for ,fact in ,(goal->lookup base '(nil nil nil))
 	for ,res = (match ,fact ((or ,@(mapcar #'goal->optima-clause (cdr goals))) ,(or collecting fact)))
-	  ,@(unless (eq loop-clause 'do)
-		    `(when ,res ,loop-clause ,res)))))
+	when ,res ,loop-clause ,res)))
 
-(defmethod handle-goals ((goal-type (eql 'not)) base goals collecting loop-clause)
+(defmethod handle-goals ((goal-type (eql :or)) (loop-clause (eql :do)) base goals collecting)
+  (with-gensyms (fact)
+    `(loop for ,fact in ,(goal->lookup base '(nil nil nil))
+	do (match ,fact ((or ,@(mapcar #'goal->optima-clause (cdr goals))) ,collecting)))))
+
+(defmethod handle-goals ((goal-type (eql :not)) (loop-clause (eql :collect)) base goals collecting)
   (with-gensyms (fact res)
     `(loop for ,fact in ,(goal->lookup base '(nil nil nil))
-	for ,res = (match ,fact ((not (or ,@(mapcar #'goal->optima-clause (cdr goals)))) ,fact))
-	  ,@(unless (eq loop-clause 'do)
-		    `(when ,res ,loop-clause ,res)))))
+	for ,res = (match ,fact ((not (or ,@(mapcar #'goal->optima-clause (cdr goals)))) ,(or collecting fact)))
+	when ,res ,loop-clause ,res)))
 
-(defmethod handle-goals (goal-type base goals collecting loop-clause)
-  ;; Same story here as in handle-goals
-  (let* ((bindings (make-hash-table))
-	 (lookup (goal->lookup base goals :bindings bindings))
-	 (destruct (goal->optima-clause goals :bindings bindings)))
-    (with-gensyms (fact res)
-      `(loop for ,fact in ,lookup 
-	  for ,res = (match ,fact (,destruct ,(or collecting fact)))
-	  ,@(unless (eq loop-clause 'do)
-	     `(when ,res ,loop-clause ,res))))))
+(defmethod handle-goals ((goal-type (eql :not)) (loop-clause (eql :do)) base goals collecting)
+  (with-gensyms (fact)
+    `(loop for ,fact in ,(goal->lookup base '(nil nil nil))
+	do (match ,fact ((not (or ,@(mapcar #'goal->optima-clause (cdr goals)))) ,collecting)))))
+
+(defmethod handle-goals (goal-type (loop-clause (eql :collect)) base goals collecting)
+  (with-gensyms (fact res)
+    `(loop for ,fact in ,(goal->lookup base goals) 
+	for ,res = (match ,fact (,(goal->optima-clause goals) ,(or collecting fact)))
+	when ,res ,loop-clause ,res)))
+
+(defmethod handle-goals (goal-type (loop-clause (eql :do)) base goals collecting)
+  (with-gensyms (fact)
+    `(loop for ,fact in ,(goal->lookup base goals) 
+	do (match ,fact (,(goal->optima-clause goals) ,collecting)))))
 
 (defmacro for-all (goal-term &key in collect do)
   (assert (or (and collect (not do))
@@ -140,6 +148,6 @@
   (with-gensyms (base)
     (let ((template (replace-anonymous (or collect do))))
       `(let ((,base ,in))
-	 ,(handle-goals (first goal-term) base goal-term template
-			(cond (do 'do)
-			      (t 'collect)))))))
+	 ,(handle-goals (->key (first goal-term))
+			(if do :do :collect)
+			base goal-term template)))))
