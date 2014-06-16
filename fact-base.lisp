@@ -21,6 +21,14 @@
     (incf (fact-id state))
     res))
 
+(defmethod lookup ((state list) &key a b c)
+  (warn "Given base is a list; traversing...")
+  (loop for f in state
+     when (and (or (not a) (equal a (first f)))
+	       (or (not b) (equal b (second f)))
+	       (or (not c) (equal c (third f))))
+     collect f))
+
 (defmethod lookup ((state fact-base) &key a b c)
   (if (every #'not (list a b c))
       (current state)

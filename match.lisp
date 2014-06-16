@@ -1,0 +1,145 @@
+(in-package :fact-base)
+
+;;; Some contents ripped bleeding from PAIP.
+;;; http://norvig.com/paip/README.html
+;;; Minor alterations are present.
+
+(defun variable? (thing)
+  (and (symbolp thing) (eql #\? (char (symbol-name thing) 0))))
+
+(defun unique-find-anywhere-if (predicate tree &optional found-so-far)
+  (if (atom tree)
+      (if (funcall predicate tree)
+	  (adjoin tree found-so-far)
+	  found-so-far)
+      (unique-find-anywhere-if
+       predicate (first tree)
+       (unique-find-anywhere-if predicate (rest tree) found-so-far))))
+
+(defun replace-anonymous (exp)
+  (cond ((eq exp '?) (gensym "?"))
+	((atom exp) exp)
+	(t (cons (replace-anonymous (first exp))
+		 (replace-anonymous (rest exp))))))
+
+(defun variables-in (exp)
+  (unique-find-anywhere-if 
+   (lambda (v) (and (variable? v) (not (eq '? v))))
+   exp))
+
+(defun any-variables? (exp)
+  (if (atom exp)
+      (variable? exp)
+      (loop for e in exp 
+	 if (listp e) do (any-variables? e)
+	 else if (variable? e) do (return t)
+	 finally (return nil))))
+
+(defun literal? (thing)
+  (or (null thing)
+      (stringp thing) 
+      (numberp thing)
+      (keywordp thing)))
+
+(defun goal->optima-clause (goal &key (bindings (make-hash-table)))
+  (let ((guards nil))
+    (labels ((make-name (elem)
+	       (let ((name (gensym)))
+		 (push (cons name elem) guards)
+		 name))
+	     (rec (elem)
+	       (cond ((literal? elem)
+		      elem)
+		     ((and (listp elem) (not (listp (cdr elem))))
+		      `(cons ,(rec (car elem)) ,(rec (cdr elem))))
+		     ((listp elem)
+		      (cons 'list (mapcar #'rec elem)))
+		     ((eq '? elem)
+		      '_)
+		     ((not (variable? elem))
+		      (make-name elem))
+		     ((and (variable? elem) (gethash elem bindings))
+		      (make-name elem))
+		     ((variable? elem)
+		      (setf (gethash elem bindings) t)
+		      elem)
+		     (t (error "Somethings' up. goal->optima-clause~%     ~s~%     ~s~%     ~s"
+			       bindings goal elem)))))
+      (let ((form (cons 'list (mapcar #'rec goal))))
+	(if guards
+	    `(guard ,form
+		    (and ,@(loop for (k . v) in guards
+			      collect `(equal ,k ,v))))
+	    form)))))
+
+(defun goal->lookup (base goal &key (bindings (make-hash-table)))
+  (flet ((->ix (elem)
+	   (cond ((and (variable? elem) (gethash elem bindings))
+		  elem)
+		 ((any-variables? elem)
+		  nil)
+		 (t elem))))
+    (destructuring-bind (a b c) goal
+      `(lookup ,base 
+	       :a ,(->ix a) 
+	       :b ,(->ix b)
+	       :c ,(->ix c)))))
+
+(defmethod handle-goals ((goal-type (eql 'and)) base goals collecting loop-clause)
+  (let ((bindings (make-hash-table)))
+    (labels ((single-goal (destruct lookup loop-clause tail)
+	       (with-gensyms (fact res)
+		 `(loop for ,fact in ,lookup 
+		     for ,res = (match ,fact (,destruct ,(or tail fact)))
+		       ,@(unless (eq loop-clause 'do) `(when ,res ,loop-clause ,res)))))
+	     (rec (goals)
+	       ;; We want to generate the lookups first, because the bindings are going to be generated
+	       ;; from the result of the lookup. Meaning, if the bindings are established in a given destruct clause,
+	       ;; they won't be usable until the NEXT lookup. 
+	       ;; Therefore, even though it isn't immediately obvious, order matters in this let* form
+	       (let* ((lookup (goal->lookup base (first goals) :bindings bindings))
+		      (destruct (goal->optima-clause (first goals) :bindings bindings)))
+		 (if (null (cdr goals))
+		     (single-goal destruct lookup loop-clause collecting)
+		     (single-goal destruct lookup 
+				  (case loop-clause
+				    (collect 'append)
+				    (do 'do))
+				  (rec (rest goals)))))))
+      (rec (rest goals)))))
+
+(defmethod handle-goals ((goal-type (eql 'or)) base goals collecting loop-clause)
+  (with-gensyms (fact res)
+    `(loop for ,fact in ,(goal->lookup base '(nil nil nil))
+	for ,res = (match ,fact ((or ,@(mapcar #'goal->optima-clause (cdr goals))) ,(or collecting fact)))
+	  ,@(unless (eq loop-clause 'do)
+		    `(when ,res ,loop-clause ,res)))))
+
+(defmethod handle-goals ((goal-type (eql 'not)) base goals collecting loop-clause)
+  (with-gensyms (fact res)
+    `(loop for ,fact in ,(goal->lookup base '(nil nil nil))
+	for ,res = (match ,fact ((not (or ,@(mapcar #'goal->optima-clause (cdr goals)))) ,fact))
+	  ,@(unless (eq loop-clause 'do)
+		    `(when ,res ,loop-clause ,res)))))
+
+(defmethod handle-goals (goal-type base goals collecting loop-clause)
+  ;; Same story here as in handle-goals
+  (let* ((bindings (make-hash-table))
+	 (lookup (goal->lookup base goals :bindings bindings))
+	 (destruct (goal->optima-clause goals :bindings bindings)))
+    (with-gensyms (fact res)
+      `(loop for ,fact in ,lookup 
+	  for ,res = (match ,fact (,destruct ,(or collecting fact)))
+	  ,@(unless (eq loop-clause 'do)
+	     `(when ,res ,loop-clause ,res))))))
+
+(defmacro for-all (goal-term &key in collect do)
+  (assert (or (and collect (not do))
+	      (and do (not collect))
+	      (and (not collect) (not do))))
+  (with-gensyms (base)
+    (let ((template (replace-anonymous (or collect do))))
+      `(let ((,base ,in))
+	 ,(handle-goals (first goal-term) base goal-term template
+			(cond (do 'do)
+			      (t 'collect)))))))
