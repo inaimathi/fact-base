@@ -85,27 +85,47 @@
 	       :b ,(->ix b)
 	       :c ,(->ix c)))))
 
-(defmethod handle-goals ((goal-type (eql :and)) loop-clause base goals collecting)
-  (let ((bindings (make-hash-table)))
-    (labels ((single-goal (destruct lookup loop-clause tail)
-	       (with-gensyms (fact res)
+;; Fuck appending/collecting in and goals. You should just be pushing into a top-level variable. It'll simplify quite a few things.
+(defmethod handle-goals ((goal-type (eql :and)) (loop-clause (eql :collect)) base goals collecting)
+  (let ((bindings (make-hash-table))
+	(final-res (gensym "FINAL-RES")))
+    (labels ((single-goal (destruct lookup tail)
+	       (with-gensyms (fact)
 		 `(loop for ,fact in ,lookup 
-		     for ,res = (match ,fact (,destruct ,(or tail fact)))
-		       ,@(unless (eq loop-clause :do) `(when ,res ,loop-clause ,res)))))
+		     do (match ,fact (,destruct ,(or tail `(push ,fact ,final-res)))))))
 	     (rec (goals)
 	       ;; We want to generate the lookups first, because the bindings are going to be generated
 	       ;; from the result of the lookup. Meaning, if the bindings are established in a given destruct clause,
 	       ;; they won't be usable until the NEXT lookup. 
-	       ;; Therefore, even though it isn't immediately obvious, order matters in this let* form
-	       (let* ((lookup (goal->lookup base (first goals) :bindings bindings))
-		      (destruct (goal->optima-clause (first goals) :bindings bindings)))
-		 (if (null (cdr goals))
-		     (single-goal destruct lookup loop-clause collecting)
-		     (single-goal destruct lookup 
-				  (case loop-clause
-				    (:collect 'append)
-				    (:do 'do))
-				  (rec (rest goals)))))))
+	       ;; Therefore, even though it isn't immediately obvious, this let is necessary
+	       (let ((lookup (goal->lookup base (first goals) :bindings bindings)))
+		 (single-goal 
+		  (goal->optima-clause (first goals) :bindings bindings)
+		  lookup
+		  (if (null (cdr goals))
+		      (when collecting `(push ,collecting ,final-res))
+		      (rec (rest goals)))))))
+      `(let ((,final-res nil))
+	 ,(rec (rest goals))
+	 (reverse ,final-res)))))
+
+(defmethod handle-goals ((goal-type (eql :and)) (loop-clause (eql :do)) base goals collecting)
+  (let ((bindings (make-hash-table)))
+    (labels ((single-goal (destruct lookup tail)
+	       (with-gensyms (fact)
+		 `(loop for ,fact in ,lookup do (match ,fact (,destruct ,tail)))))
+	     (rec (goals)
+	       ;; We want to generate the lookups first, because the bindings are going to be generated
+	       ;; from the result of the lookup. Meaning, if the bindings are established in a given destruct clause,
+	       ;; they won't be usable until the NEXT lookup. 
+	       ;; Therefore, even though it isn't immediately obvious, this let is necessary
+	       (let ((lookup (goal->lookup base (first goals) :bindings bindings)))
+		 (single-goal 
+		  (goal->optima-clause (first goals) :bindings bindings)
+		  lookup
+		  (if (null (cdr goals))
+		      collecting
+		      (rec (rest goals)))))))
       (rec (rest goals)))))
 
 (defmethod handle-goals ((goal-type (eql :or)) (loop-clause (eql :collect)) base goals collecting)
