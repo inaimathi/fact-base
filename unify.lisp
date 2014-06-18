@@ -137,8 +137,8 @@
        (loop for ,res = (funcall ,gen)
 	  until (fail? ,res)
 	    ,(if do 'do 'collect)
-	    ,(if (or collect do)
-		 `(apply (lambda ,(variables-in goal-term)
-			   ,(or collect do))
-			 (subst-bindings ,res ',(variables-in goal-term)))
-		 `(subst-bindings ,res ',(variables-in goal-term)))))))
+	    ,(let ((out (or collect do)))
+		  (if out
+		      `(apply (lambda ,(variables-in out) ,out)
+			      (subst-bindings ,res ',(variables-in out)))
+		      `(subst-bindings ,res ',(variables-in goal-term))))))))
