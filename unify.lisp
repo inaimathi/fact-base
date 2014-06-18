@@ -12,8 +12,8 @@
 (defun variables-in (thing)
   (unique-find-anywhere-if #'variable? thing))
 
-(defmethod pre-search (goal-form facts)
-  (destructuring-bind (a b c) goal-form
+(defmethod pre-search (goal-form facts &optional bindings)
+  (destructuring-bind (a b c) (subst-bindings bindings goal-form)
     (lookup facts
 	    :a (unless (any-variables? a) a)
 	    :b (unless (any-variables? b) b)
@@ -49,7 +49,7 @@
 	(t +fail+)))
 
 (defun single-goal (base goal-form &optional bindings)
-  (let ((fs (pre-search goal-form base)))
+  (let ((fs (pre-search goal-form base bindings)))
     (lambda ()
       (loop while fs for f = (pop fs) for res = (unify goal-form f bindings)
 	 unless (fail? res) return res
