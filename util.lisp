@@ -74,3 +74,41 @@
 	 if (listp e) do (any-variables? e)
 	 else if (variable? e) do (return t)
 	 finally (return nil))))
+
+;;;;;;;;;; File-system utils
+(defun read-entry-from-end (fname &key (skip 0) start)
+  "Takes a filename, returns a history entry from the end of that file.
+Two keyword arguments:
+  - :skip  - is a number of entries to skip before the one we want (defaults to 0)
+  - :start - is the position in the file to start searching. 
+             It defaults to the end of the file.
+             Careful here; if you pass it a position in the middle of an s-expression, things will explode."
+  (assert (>= skip 0) nil "I can't skip a negative number, Dave.")
+  (with-open-file (s fname)
+    (let* ((len (file-length s))
+	   (cur (or (and start (> len start) start) (- len 1)))
+	   (paren-depth 0))
+      (labels ((peek () (peek-char nil s))
+	       (dec () (file-position s (decf cur)))
+	       (to-open-quote ()
+		 (loop for c = (peek) do (dec)
+		    until (char= #\" c))
+		 (slashes))
+	       (slashes ()
+		 (let ((ct 0))
+		   (loop for c = (peek) while (char= #\\ c)
+		      do (incf ct) do (dec))
+		   (when (oddp ct) (to-open-quote))))
+	       (to-entry-start ()
+		 (loop for c = (peek)
+		    do (dec)
+		    do (case c
+			 (#\" (to-open-quote))
+			 (#\( (decf paren-depth))
+			 (#\) (incf paren-depth)))
+		    until (or (zerop cur) (and (char= #\( c) (zerop paren-depth))))))
+	(file-position s cur)
+	(loop repeat (+ skip 1) until (zerop cur)
+	   do (to-entry-start))
+	(let ((start (file-position s)))
+	  (values (read s) start))))))

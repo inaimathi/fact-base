@@ -22,7 +22,6 @@
     res))
 
 (defmethod lookup ((state list) &key a b c)
-  (warn "Given base is a list; traversing...")
   (if (and (not a) (not b) (not c))
       state
       (loop for f in state
