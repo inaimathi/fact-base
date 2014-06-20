@@ -71,7 +71,7 @@
      (insert state fact))))
 
 ;;;;;;;;;; Fact-base specific
-(defmethod update-id! ((state fact-base) (fact list))
+(defun update-id! (state fact)
   (when (>= (first fact) (fact-id state))
     (setf (fact-id state) (+ 1 (first fact)))))
 
