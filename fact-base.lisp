@@ -71,20 +71,31 @@
      (insert state fact))))
 
 ;;;;;;;;;; Fact-base specific
+(defmethod update-id! ((state fact-base) (fact list))
+  (when (>= (first fact) (fact-id state))
+    (setf (fact-id state) (+ 1 (first fact)))))
+
 (defmethod apply-entry! ((state fact-base) (entry list))
-  (let ((ts (first entry))
-	(id (match entry
-	      ((list _ :insert (list id _ _)) id)
-	      ((list _ :change (list _ (list id _ _))) id)
-	      (_ 0))))
-    (with-slots (current earliest-entry latest-entry fact-id) state
-      (setf current (apply-entry (current state) entry)
-	    earliest-entry (local-time:timestamp-minimum (or earliest-entry ts) ts)
-	    latest-entry (local-time:timestamp-maximum (or latest-entry ts) ts)
-	    fact-id (max fact-id (+ 1 id))))))
+  (let ((ts (first entry)))
+    (with-slots (earliest-entry latest-entry current) state
+      (setf earliest-entry (local-time:timestamp-minimum (or earliest-entry ts) ts)
+	    latest-entry (local-time:timestamp-maximum (or latest-entry ts) ts)))
+    (match entry
+      ((list _ :insert fact) 
+       (insert-fact-internal! state fact :update-delta? nil))
+      ((list _ :change (list old new))
+       (change-fact-internal! state old new :update-delta? nil))
+      ((list _ :delete fact)
+       (delete-fact-internal! state fact :update-delta? nil)))))
 
 (defmethod reverse-entry! ((state fact-base) (entry list))
-  (setf (current state) (reverse-entry (current state) entry)))
+  (match entry
+    ((list _ :insert fact)
+     (delete-fact-internal! state fact :update-delta? nil))
+    ((list _ :change (list old new))
+     (change-fact-internal! state new old :update-delta? nil))
+    ((list _ :delete fact)
+     (insert-fact-internal! state fact :update-delta? nil))))
 
 (defmethod multi-insert! ((state fact-base) (b/c-pairs list))
   (loop with id = (next-id! state)
@@ -96,31 +107,42 @@
     (insert! state (list id b c))
     id))
 
-(defmethod insert! ((state fact-base) (fact list))
+(defun insert-fact-internal! (state fact &key (update-delta? t))
   (assert (fact-p fact) nil "INSERT! :: A fact is a list of length 3: ~s" fact)
-  (let ((time (local-time:now))
-	(id (first fact)))
-    (when (>= id (fact-id state)) (setf (fact-id state) (+ 1 id)))
-    (push! (list time :insert fact) (delta state))
-    (insert! (index state) fact)
-    (push fact (current state))
-    nil))
+  (update-id! state fact)
+  (when update-delta?
+    (push! (list (local-time:now) :insert fact) (delta state)))
+  (insert! (index state) fact)
+  (push fact (current state))
+  nil)
 
-(defmethod change! ((state fact-base) (old list) (new list))
+(defmethod insert! ((state fact-base) (fact list))
+  (insert-fact-internal! state fact))
+
+(defun change-fact-internal! (state old new &key (update-delta? t))
   (assert (fact-p old) nil "CHANGE! [old] :: A fact is a list of length 3: ~s" old)
   (assert (fact-p new) nil "CHANGE! [new] :: A fact is a list of length 3: ~s" new)
   (setf (current state) (insert (delete (current state) old) new))
-  (push! (list (local-time:now) :change (list old new)) (delta state))
+  (when update-delta?
+    (push! (list (local-time:now) :change (list old new)) (delta state)))
+  (update-id! state new)
   (delete! (index state) old)
   (insert! (index state) new)
   nil)
 
-(defmethod delete! ((state fact-base) (fact list))
+(defmethod change! ((state fact-base) (old list) (new list))
+  (change-fact-internal! state old new))
+
+(defun delete-fact-internal! (state fact &key (update-delta? t))
   (assert (fact-p fact) nil "DELETE! :: A fact is a list of length 3: ~s" fact)
   (setf (current state) (delete (current state) fact))
-  (push! (list (local-time:now) :delete fact) (delta state))
+  (when update-delta?
+    (push! (list (local-time:now) :delete fact) (delta state)))
   (delete! (index state) fact)
   nil)
+
+(defmethod delete! ((state fact-base) (fact list))
+  (delete-fact-internal! state fact))
 
 ;;;;;;;;;; /(De)?Serialization/i
 (defmethod read-entry! ((s stream))
@@ -156,5 +178,4 @@
     (with-open-file (s file-name :direction :input)
       (loop for entry = (read-entry! s) while entry
 	 do (apply-entry! res entry)))
-    (map-insert! (index res) (current res))
     res))
