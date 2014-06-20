@@ -10,7 +10,8 @@
    (delta :accessor delta :initform (queue))
    (current :accessor current :initform nil)
    (index :accessor index :initarg :index)
-   (history :accessor history :initform (queue))))
+   (earliest-entry :accessor earliest-entry :initform nil :initarg :earliest-entry)
+   (latest-entry :accessor latest-entry :initform nil :initarg :latest-entry)))
 
 (defun make-fact-base (&key (indices '(:a :b :c)) (file-name (temp-file-name)))
   (make-instance 'fact-base :index (make-index indices) :file-name file-name))
@@ -51,31 +52,39 @@
 (defmethod delete ((state list) (fact list))
   (remove fact state :test #'equal))
 
-(defmethod history-slice ((history list) &key min-time max-time)
-  (let ((range-fn (make-range-fn min-time max-time)))
-    (loop for entry in history 
-       when (funcall range-fn entry) collect entry)))
+(defmethod apply-entry ((state list) (entry list))
+  (match entry
+    ((list _ :insert fact)
+     (insert state fact))
+    ((list _ :change (list fact-a fact-b))
+     (insert (delete state fact-a) fact-b))
+    ((list _ :delete fact)
+     (delete state fact))))
 
-(defmethod history-slice ((state fact-base) &key min-time max-time)
-  (history-slice (history state) :min-time min-time :max-time max-time))
-
-(defmethod project ((history list) &key min-time max-time)
-  (let ((range-fn (make-range-fn min-time max-time)))
-    (loop with res = (list)
-       for entry in history when (funcall range-fn entry)
-       do (setf res
-		(match entry
-		  ((list _ :insert fact)
-		   (insert res fact))
-		  ((list _ :change (list fact-a fact-b))
-		   (insert (delete res fact-a) fact-b))
-		  ((list _ :delete fact)
-		   (delete res fact))))
-       finally (return res))))
+(defmethod reverse-entry ((state list) (entry list))
+  (match entry
+    ((list _ :insert fact)
+     (delete state fact))
+    ((list _ :change (list fact-a fact-b))
+     (insert (delete state fact-b) fact-a))
+    ((list _ :delete fact)
+     (insert state fact))))
 
 ;;;;;;;;;; Fact-base specific
-(defmethod project! ((state fact-base))
-  (setf (current state) (project (entries (history state)))))
+(defmethod apply-entry! ((state fact-base) (entry list))
+  (let ((ts (first entry))
+	(id (match entry
+	      ((list _ :insert (list id _ _)) id)
+	      ((list _ :change (list _ (list id _ _))) id)
+	      (_ 0))))
+    (with-slots (current earliest-entry latest-entry fact-id) state
+      (setf current (apply-entry (current state) entry)
+	    earliest-entry (local-time:timestamp-minimum (or earliest-entry ts) ts)
+	    latest-entry (local-time:timestamp-maximum (or latest-entry ts) ts)
+	    fact-id (max fact-id (+ 1 id))))))
+
+(defmethod reverse-entry! ((state fact-base) (entry list))
+  (setf (current state) (reverse-entry (current state) entry)))
 
 (defmethod multi-insert! ((state fact-base) (b/c-pairs list))
   (loop with id = (next-id! state)
@@ -92,9 +101,7 @@
   (let ((time (local-time:now))
 	(id (first fact)))
     (when (>= id (fact-id state)) (setf (fact-id state) (+ 1 id)))
-    (let ((h (list time :insert fact)))
-      (push! h (history state))
-      (push! h (delta state)))
+    (push! (list time :insert fact) (delta state))
     (insert! (index state) fact)
     (push fact (current state))
     nil))
@@ -103,9 +110,7 @@
   (assert (fact-p old) nil "CHANGE! [old] :: A fact is a list of length 3: ~s" old)
   (assert (fact-p new) nil "CHANGE! [new] :: A fact is a list of length 3: ~s" new)
   (setf (current state) (insert (delete (current state) old) new))
-  (let ((h (list (local-time:now) :change (list old new))))
-    (push! h (history state))
-    (push! h (delta state)))
+  (push! (list (local-time:now) :change (list old new)) (delta state))
   (delete! (index state) old)
   (insert! (index state) new)
   nil)
@@ -113,20 +118,11 @@
 (defmethod delete! ((state fact-base) (fact list))
   (assert (fact-p fact) nil "DELETE! :: A fact is a list of length 3: ~s" fact)
   (setf (current state) (delete (current state) fact))
-  (let ((h (list (local-time:now) :delete fact)))
-    (push! h (history state))
-    (push! h (delta state)))
+  (push! (list (local-time:now) :delete fact) (delta state))
   (delete! (index state) fact)
   nil)
 
 ;;;;;;;;;; /(De)?Serialization/i
-(defun list->timestamp (timestamp-list)
-  (destructuring-bind (day sec nsec) timestamp-list
-    (local-time:make-timestamp :day day :sec sec :nsec nsec)))
-
-(defun timestamp->list (timestamp)
-  (list (local-time:day-of timestamp) (local-time:sec-of timestamp) (local-time:nsec-of timestamp)))
-
 (defmethod read-entry! ((s stream))
   (awhen (read s nil nil)
     (cons (list->timestamp (car it))
@@ -143,32 +139,11 @@
 (defmethod write-entries! ((entries list) (file string) if-exists)
   (write-entries! entries (pathname file) if-exists))
 
-(defmethod write-delta! ((state fact-base) &key (file-name (file-name state)) (zero-delta? t))
+(defmethod write! ((state fact-base) &key (file-name (file-name state)) (zero-delta? t))
   (ensure-directories-exist file-name)
   (write-entries! (entries (delta state)) file-name :append)
   (when zero-delta? (setf (delta state) (queue)))
   file-name)
-
-(defmethod write! ((state fact-base) &key (file-name (file-name state)) (zero-delta? t))
-  (ensure-directories-exist file-name)
-  (write-entries! (entries (history state)) file-name :supersede)
-  (when zero-delta? (setf (delta state) (queue)))
-  file-name)
-
-(defmethod read! ((s stream) &key min-time max-time)
-  (let ((range-fn (make-range-fn min-time max-time)))
-    (loop for entry = (read-entry! s) while entry for ts = (first entry)
-       when (funcall range-fn entry) collect entry into es
-       maximize (match entry
-		  ((list _ :insert (list id _ _)) id)
-		  ((list _ :change (list id _ _)) id)
-		  (_ 0)) into max-id
-       finally (return (values es max-id)))))
-
-(defmethod read! ((file-name pathname) &key min-time max-time)
-  (when (cl-fad:file-exists-p file-name)
-    (with-open-file (s file-name :direction :input)
-      (read! s :min-time min-time :max-time max-time))))
 
 (defmethod index! ((state fact-base) (indices list))
   (setf (index state) (make-index indices))
@@ -176,10 +151,10 @@
   nil)
 
 (defmethod load! ((file-name pathname) &key (indices '(:a :b :c)))
+  (assert (cl-fad:file-exists-p file-name) nil "Nonexistent file ~s" file-name)
   (let ((res (make-fact-base :indices indices :file-name file-name)))
-    (multiple-value-bind (es id) (read! file-name)
-      (setf (history res) (queue es)
-	    (fact-id res) (+ id 1)))
-    (project! res)
+    (with-open-file (s file-name :direction :input)
+      (loop for entry = (read-entry! s) while entry
+	 do (apply-entry! res entry)))
     (map-insert! (index res) (current res))
     res))

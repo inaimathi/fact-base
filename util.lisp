@@ -34,6 +34,13 @@
   (mapcar (lambda (c) (intern (coerce (list c) 'string)))
 	  (coerce (symbol-name keyword) 'list)))
 
+(defun list->timestamp (timestamp-list)
+  (destructuring-bind (day sec nsec) timestamp-list
+    (local-time:make-timestamp :day day :sec sec :nsec nsec)))
+
+(defun timestamp->list (timestamp)
+  (list (local-time:day-of timestamp) (local-time:sec-of timestamp) (local-time:nsec-of timestamp)))
+
 ;;;;;;;;;; Unification utils
 (defun unique-find-anywhere-if (predicate tree &optional found-so-far)
   (if (atom tree)
