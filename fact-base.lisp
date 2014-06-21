@@ -185,7 +185,7 @@ Two keyword arguments:
       (loop repeat (+ skip 1) until (zerop cur)
 	 do (to-entry-start))
       (let ((fp (file-position s))
-	    (res (read s)))
+	    (res (read-entry! s)))
 	(file-position s fp)
 	res))))
 
