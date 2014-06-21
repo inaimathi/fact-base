@@ -150,6 +150,45 @@
     (cons (list->timestamp (car it))
 	  (cdr it))))
 
+(defmethod read-entry-from-end! ((s stream) &key (skip 0) start)
+  "Only use this inside of `with-open-elif`.
+It's just an EXTREMELY expensive, non forwarding version of read-entry! otherwise.
+Takes a stream opened with `with-open-elif`, returns a history entry from the end of that file.
+Two keyword arguments:
+  - :skip  - is a number of entries to skip before the one we want (defaults to 0, which gives the last one)
+  - :start - is the position in the file to start searching. 
+             It defaults to the end of the file.
+             Careful here; if you pass it a position in the middle of an s-expression, things will explode."
+  (assert (>= skip 0) nil "I can't skip a negative number, Dave.")
+  (assert (or (null start) (>= start 0)) nil "I can't read negative bytes, Dave.")
+  (let ((cur (file-position s))
+	(paren-depth 0))
+    (labels ((peek () (peek-char nil s))
+	     (dec () (file-position s (decf cur)))
+	     (to-quote ()
+	       (loop for c = (peek) do (dec)
+		  until (char= #\" c))
+	       (slashes))
+	     (slashes ()
+	       (let ((ct 0))
+		 (loop for c = (peek) while (char= #\\ c)
+		    do (incf ct) do (dec))
+		 (when (oddp ct) (to-quote))))
+	     (to-entry-start ()
+	       (loop for c = (peek)
+		  do (dec)
+		  do (case c
+		       (#\" (to-quote))
+		       (#\( (decf paren-depth))
+		       (#\) (incf paren-depth)))
+		  until (or (zerop cur) (and (char= #\( c) (zerop paren-depth))))))
+      (loop repeat (+ skip 1) until (zerop cur)
+	 do (to-entry-start))
+      (let ((fp (file-position s))
+	    (res (read s)))
+	(file-position s fp)
+	res))))
+
 (defmethod write-entry! ((entry list) (s stream))
   (format s "~s~%" (cons (timestamp->list (car entry)) (cdr entry))))
 
@@ -161,10 +200,10 @@
 (defmethod write-entries! ((entries list) (file string) if-exists)
   (write-entries! entries (pathname file) if-exists))
 
-(defmethod write! ((state fact-base) &key (file-name (file-name state)) (zero-delta? t))
+(defmethod write! ((state fact-base) &key (file-name (file-name state)))
   (ensure-directories-exist file-name)
   (write-entries! (entries (delta state)) file-name :append)
-  (when zero-delta? (setf (delta state) (queue)))
+  (setf (delta state) (queue))
   file-name)
 
 (defmethod index! ((state fact-base) (indices list))

@@ -83,41 +83,9 @@
 	 finally (return nil))))
 
 ;;;;;;;;;; File-system utils
-;; do we want an option for reading multiple entries? What would that need to look like?
-(defun read-entry-from-end (fname &key (skip 0) start)
-  "Takes a filename, returns a history entry from the end of that file.
-Two keyword arguments:
-  - :skip  - is a number of entries to skip before the one we want (defaults to 0, which gives the last one)
-  - :start - is the position in the file to start searching. 
-             It defaults to the end of the file.
-             Careful here; if you pass it a position in the middle of an s-expression, things will explode."
-  (assert (>= skip 0) nil "I can't skip a negative number, Dave.")
-  (assert (or (null start) (>= start 0)) nil "I can't read negative bytes, Dave.")
-  (with-open-file (s fname)
-    (let* ((len (file-length s))
-	   (cur (if start (min (- len 1) start) (- len 1)))
-	   (paren-depth 0))
-      (labels ((peek () (peek-char nil s))
-	       (dec () (file-position s (decf cur)))
-	       (to-quote ()
-		 (loop for c = (peek) do (dec)
-		    until (char= #\" c))
-		 (slashes))
-	       (slashes ()
-		 (let ((ct 0))
-		   (loop for c = (peek) while (char= #\\ c)
-		      do (incf ct) do (dec))
-		   (when (oddp ct) (to-quote))))
-	       (to-entry-start ()
-		 (loop for c = (peek)
-		    do (dec)
-		    do (case c
-			 (#\" (to-quote))
-			 (#\( (decf paren-depth))
-			 (#\) (incf paren-depth)))
-		    until (or (zerop cur) (and (char= #\( c) (zerop paren-depth))))))
-	(file-position s cur)
-	(loop repeat (+ skip 1) until (zerop cur)
-	   do (to-entry-start))
-	(let ((fp (file-position s)))
-	  (values (read s) fp))))))
+(defmacro with-open-elif ((stream file-name) &body body)
+  (with-gensyms (f)
+    `(let ((,f ,file-name))
+       (with-open-file (,stream ,f)
+	 (file-position ,stream (- (file-length ,stream) 1))
+	 ,@body))))
