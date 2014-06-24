@@ -5,13 +5,22 @@
   ((table :reader table :initform (make-hash-table :test 'equal))))
 
 (defclass fact-base ()
-  ((file-name :reader file-name :initarg :file-name)
-   (fact-id :accessor fact-id :initform 0)
-   (delta :accessor delta :initform (queue))
-   (current :accessor current :initform nil)
-   (index :accessor index :initarg :index)
-   (earliest-entry :accessor earliest-entry :initform nil :initarg :earliest-entry)
-   (latest-entry :accessor latest-entry :initform nil :initarg :latest-entry)))
+  ((file-name :reader file-name :initarg :file-name 
+	      :documentation "The file associated with this fact-base")
+   (fact-id :accessor fact-id :initform 0 
+	    :documentation "The next free fact-id")
+   (delta :accessor delta :initform (queue) 
+	  :documentation "A collection of history entries that have not yet been written to disk")
+   (current :accessor current :initform nil
+	    :documentation "The current projection of this fact-base")
+   (index :accessor index :initarg :index
+	  :documentation "The index structure of the current projection (used to accelerate queries)")
+   (entry-count :accessor entry-count :initform 0 
+		:documentation "The count of entries in disk history.")
+   (earliest-entry :accessor earliest-entry :initform nil :initarg :earliest-entry
+		   :documentation "The earliest entry in the disk history.")
+   (latest-entry :accessor latest-entry :initform nil :initarg :latest-entry
+		 :documentation "The latest entry in the disk history.")))
 
 (defun make-fact-base (&key (indices '(:a :b :c)) (file-name (temp-file-name)))
   (make-instance 'fact-base :index (make-index indices) :file-name file-name))
@@ -69,6 +78,71 @@
      (insert (delete state fact-b) fact-a))
     ((list _ :delete fact)
      (insert state fact))))
+
+(defun reverse-from-delta (state count)
+  (loop with res = (current state) 
+     repeat count for e in (reverse (entries (delta state)))
+     do (setf res (reverse-entry res e))
+     finally (return res)))
+
+(defmethod rewind-to ((state fact-base) (index integer))
+  (let ((total (+ (entry-count state) (entry-count (delta state)))))
+    (rewind-by state (min (max (- total index) 0) total))))
+
+;; (local-time:timestamp- (local-time:now) (round 13.460158d0) :sec)
+;;                                                ^-- got that from local-time:timestamp-difference
+
+(defmethod rewind-to ((state fact-base) (time timestamp))
+  (let ((latest (or (caar (last-cons (delta state))) (latest-entry state))))
+    (cond ((local-time:timestamp>= time latest)
+	   (current state))
+	  ((local-time:timestamp>= (earliest-entry state) time)
+	   nil)
+	  ((> (local-time:timestamp-difference time (earliest-entry state))
+	      (local-time:timestamp-difference latest time))
+	   ;; Project back from the delta.
+	   ;; If you still need to go further, start from the end of the file
+	   (let ((res (current state)))
+	     (unless
+		 (loop for e in (reverse (entries (delta state)))
+		    when (local-time:timestamp>= time (first e)) return t
+		    do (setf res (reverse-entry res e)))
+	       (with-open-elif (s (file-name state))
+		 (loop for e = (read-entry-from-end! s) while e
+		    until (local-time:timestamp>= time (first e))
+		    do (setf res (reverse-entry res e)))))
+	     res))
+	  (t
+	   (let ((res nil))
+	     (with-open-file (s (file-name state))
+	       (loop for e = (read-entry! s) while e
+		  do (setf res (apply-entry res e))
+		  until (local-time:timestamp>= (first e) time))
+	       res))))))
+
+(defmethod rewind-by ((state fact-base) (count integer))
+  (let ((total (+ (entry-count state) (entry-count (delta state)))))
+    (cond ((zerop count)
+	   (current state))
+	  ((>= count total)
+	   nil)
+	  ((>= (entry-count (delta state)) count)
+	   (reverse-from-delta state count))
+	  ((> (/ total 2) count)
+	   (format t "Reversing from end of file...")
+	   (let* ((dc (entry-count (delta state)))
+		  (res (reverse-from-delta state dc)))
+	     (with-open-elif (s (file-name state))
+	       (loop repeat (- count dc) for e = (read-entry-from-end! s)
+		  do (setf res (reverse-entry res e))))
+	     res))
+	  (t
+	   (let ((ct (- total count))
+		 (res nil))
+	     (with-open-file (s (file-name state))
+	       (loop repeat ct for e = (read-entry! s)
+		  do (setf res (apply-entry res e))))
+	     res)))))
 
 ;;;;;;;;;; Fact-base specific
 (defun update-id! (state fact)
@@ -203,7 +277,11 @@ Two keyword arguments:
 (defmethod write! ((state fact-base) &key (file-name (file-name state)))
   (ensure-directories-exist file-name)
   (write-entries! (entries (delta state)) file-name :append)
-  (setf (delta state) (queue))
+  (with-slots (delta entry-count earliest-entry latest-entry) state
+    (setf entry-count (+ entry-count (entry-count delta))
+	  earliest-entry (or earliest-entry (caar (entries delta)))
+	  latest-entry (caar (last-cons delta))
+	  delta (queue)))
   file-name)
 
 (defmethod index! ((state fact-base) (indices list))
@@ -216,5 +294,6 @@ Two keyword arguments:
   (let ((res (make-fact-base :indices indices :file-name file-name)))
     (with-open-file (s file-name :direction :input)
       (loop for entry = (read-entry! s) while entry
+	 do (incf (entry-count res))
 	 do (apply-entry! res entry)))
     res))

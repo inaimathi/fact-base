@@ -5,10 +5,10 @@
   (:shadow #:delete)
   (:import-from #:alexandria #:with-gensyms)
   (:import-from #:anaphora #:awhen #:aif #:it)
-  (:export :fact-base :make-fact-base :current :delta
+  (:import-from #:local-time #:timestamp)
+  (:export :fact-base :make-fact-base :current :delta :rewind-by :rewind-to
 	   :file-name :next-id!
 	   :for-all :lookup 
 	   :multi-insert! :insert-new! :insert! :delete! 
-	   :index! ;; :project! :project
-	   :write! :load!))
+	   :index! :write! :load!))
 
