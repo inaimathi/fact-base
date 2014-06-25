@@ -89,9 +89,6 @@
   (let ((total (+ (entry-count state) (entry-count (delta state)))))
     (rewind-by state (min (max (- total index) 0) total))))
 
-;; (local-time:timestamp- (local-time:now) (round 13.460158d0) :sec)
-;;                                                ^-- got that from local-time:timestamp-difference
-
 (defmethod rewind-to ((state fact-base) (time timestamp))
   (let ((latest (or (caar (last-cons (delta state))) (latest-entry state))))
     (cond ((local-time:timestamp>= time latest)
@@ -143,6 +140,13 @@
 	       (loop repeat ct for e = (read-entry! s)
 		  do (setf res (apply-entry res e))))
 	     res)))))
+
+;; (local-time:timestamp- (local-time:now) (round 13.460158d0) :sec)
+;;                                                ^-- got that from local-time:timestamp-difference
+
+;; (defmethod rewind-by ((state fact-base) (secs-ago double-float))
+;;   (let ((latest (or (caar (last-cons (delta state))) (latest-entry state))))
+;;     (rewind-to state (local-time:timestamp- latest (round secs-ago) :sec))))
 
 ;;;;;;;;;; Fact-base specific
 (defun update-id! (state fact)
