@@ -85,10 +85,6 @@
      do (setf res (reverse-entry res e))
      finally (return res)))
 
-(defmethod rewind-to ((state fact-base) (index integer))
-  (let ((total (+ (entry-count state) (entry-count (delta state)))))
-    (rewind-by state (min (max (- total index) 0) total))))
-
 (defmethod rewind-to ((state fact-base) (time timestamp))
   (let ((latest (or (caar (last-cons (delta state))) (latest-entry state))))
     (cond ((local-time:timestamp>= time latest)
@@ -117,7 +113,11 @@
 		  until (local-time:timestamp>= (first e) time))
 	       res))))))
 
-(defmethod rewind-by ((state fact-base) (count integer))
+(defmethod rewind-to ((state fact-base) (index integer))
+  (let ((total (+ (entry-count state) (entry-count (delta state)))))
+    (rewind-by-internal state (min (max (- total index) 0) total) :entries)))
+
+(defmethod rewind-by-internal ((state fact-base) (count integer) (unit (eql :entries)))
   (let ((total (+ (entry-count state) (entry-count (delta state)))))
     (cond ((zerop count)
 	   (current state))
@@ -141,12 +141,23 @@
 		  do (setf res (apply-entry res e))))
 	     res)))))
 
-;; (local-time:timestamp- (local-time:now) (round 13.460158d0) :sec)
-;;                                                ^-- got that from local-time:timestamp-difference
-
-;; (defmethod rewind-by ((state fact-base) (secs-ago double-float))
-;;   (let ((latest (or (caar (last-cons (delta state))) (latest-entry state))))
-;;     (rewind-to state (local-time:timestamp- latest (round secs-ago) :sec))))
+(defmethod rewind-by ((state fact-base) delta &optional (units :entries))
+  (assert (member units '(:entries :months :years :nanoseconds :seconds :minutes :hours :days))
+	  nil "units must be one of ~s" 
+	  '(:entries :months :years :nanoseconds :seconds :minutes :hours :days))
+  (if (eql units :entries)
+      (rewind-by-internal state delta units)
+      (let ((latest (or (caar (last-cons (delta state))) (latest-entry state))))
+	(rewind-to state (local-time:timestamp- 
+			      latest delta 
+			      (case units
+				(:months :month)
+				(:years :year)
+				(:nanoseconds :nsec)
+				(:seconds :sec)
+				(:minutes :minute)
+				(:hours :hour)
+				(:days :day)))))))
 
 ;;;;;;;;;; Fact-base specific
 (defun update-id! (state fact)
