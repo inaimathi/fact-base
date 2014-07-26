@@ -239,17 +239,13 @@
     (cons (list->timestamp (car it))
 	  (cdr it))))
 
-(defmethod read-entry-from-end! ((s stream) &key (skip 0) start)
+(defmethod read-entry-from-end! ((s stream) &key (skip 0))
   "Only use this inside of `with-open-elif`.
 It's just an EXTREMELY expensive, non forwarding version of read-entry! otherwise.
 Takes a stream opened with `with-open-elif`, returns a history entry from the end of that file.
 Two keyword arguments:
-  - :skip  - is a number of entries to skip before the one we want (defaults to 0, which gives the last one)
-  - :start - is the position in the file to start searching. 
-             It defaults to the end of the file.
-             Careful here; if you pass it a position in the middle of an s-expression, things will explode."
+  - :skip  - is a number of entries to skip before the one we want (defaults to 0, which gives the last one)"
   (assert (>= skip 0) nil "I can't skip a negative number, Dave.")
-  (assert (or (null start) (>= start 0)) nil "I can't read negative bytes, Dave.")
   (let ((cur (file-position s))
 	(paren-depth 0))
     (labels ((peek () (peek-char nil s))
