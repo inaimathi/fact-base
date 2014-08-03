@@ -26,6 +26,9 @@
   (make-instance 'fact-base :index (make-index indices) :file-name file-name))
 
 ;;;;;;;;;; Basics
+(defmethod total-entries ((state fact-base))
+  (+ (entry-count state) (entry-count (delta state))))
+
 (defmethod next-id! ((state fact-base))
   (let ((res (fact-id state)))
     (incf (fact-id state))
@@ -107,7 +110,7 @@
 	    state (lambda (e) (local-time:timestamp>= time (first e))))))))
 
 (defmethod rewind-to ((state fact-base) (index integer))
-  (let ((total (+ (entry-count state) (entry-count (delta state)))))
+  (let ((total (total-entries state)))
     (rewind-by-internal state (min (max (- total index) 0) total))))
 
 (defmethod rewind-to ((state fact-base) (tag string))
