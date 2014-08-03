@@ -19,11 +19,18 @@
 		:documentation "The count of entries in disk history.")
    (earliest-entry :accessor earliest-entry :initform nil :initarg :earliest-entry
 		   :documentation "The earliest entry in the disk history.")
+   (in-memory? :reader in-memory? :initarg :in-memory? :initform nil
+	       :documentation "Flag that designates whether this fact-base is going to keep its history in memory or on disk.
+For fact bases with a relatively short history, and/or ones with a requirement for high-frequency rewind, keeping it in memory makes more sense.
+If you don't need rewinding very often or quickly, or will keep a very deep history for a particular notebook, maybe keep it on disk.")
+   (history :reader history :initform nil :initarg :history
+	    :documentation "If `in-memory?` is true, this should be a queue of this fact-bases' history entries.")
    (latest-entry :accessor latest-entry :initform nil :initarg :latest-entry
 		 :documentation "The latest entry in the disk history.")))
 
-(defun make-fact-base (&key (indices '(:a :b :c)) (file-name (temp-file-name)))
-  (make-instance 'fact-base :index (make-index indices) :file-name file-name))
+(defun make-fact-base (&key (indices '(:a :b :c)) (file-name (temp-file-name)) in-memory?)
+  (make-instance 'fact-base :index (make-index indices) :file-name file-name 
+		 :in-memory? in-memory? :history (when in-memory? (queue))))
 
 ;;;;;;;;;; Basics
 (defmethod total-entries ((state fact-base))
@@ -94,9 +101,12 @@
       (unless (loop for e in (reverse (entries (delta state)))
 		 if (funcall fn e) return t
 		 else do (rev! e))
-	(with-open-elif (s (file-name state))
-	  (loop for e = (read-entry-from-end! s) while e
-	     until (funcall fn e) do (rev! e)))))
+	(if (in-memory? state)
+	    (loop for e in (reverse (entries (history state)))
+	       until (funcall fn e) do (rev! e))
+	    (with-open-elif (s (file-name state))
+	      (loop for e = (read-entry-from-end! s) while e
+		 until (funcall fn e) do (rev! e))))))
     (values res (alexandria:hash-table-keys affected))))
 
 (defmethod rewind-to ((state fact-base) (time timestamp))
@@ -193,8 +203,9 @@
 (defun insert-fact-internal! (state fact &key (update-delta? t))
   (assert (fact-p fact) nil "INSERT! :: A fact is a list of length 3: ~s" fact)
   (update-id! state fact)
-  (when update-delta?
-    (push! (list (local-time:now) :insert fact) (delta state)))
+  (let ((entry (list (local-time:now) :insert fact)))
+    (when update-delta? (push! entry (delta state)))
+    (when (in-memory? state) (push! entry (history state))))
   (insert! (index state) fact)
   (push fact (current state))
   nil)
@@ -206,8 +217,9 @@
   (assert (fact-p old) nil "CHANGE! [old] :: A fact is a list of length 3: ~s" old)
   (assert (fact-p new) nil "CHANGE! [new] :: A fact is a list of length 3: ~s" new)
   (setf (current state) (insert (delete (current state) old) new))
-  (when update-delta?
-    (push! (list (local-time:now) :change (list old new)) (delta state)))
+  (let ((entry (list (local-time:now) :change (list old new))))
+    (when update-delta? (push! entry (delta state)))
+    (when (in-memory? state) (push! entry (history state))))
   (update-id! state new)
   (delete! (index state) old)
   (insert! (index state) new)
@@ -219,8 +231,9 @@
 (defun delete-fact-internal! (state fact &key (update-delta? t))
   (assert (fact-p fact) nil "DELETE! :: A fact is a list of length 3: ~s" fact)
   (setf (current state) (delete (current state) fact))
-  (when update-delta?
-    (push! (list (local-time:now) :delete fact) (delta state)))
+  (let ((entry (list (local-time:now) :delete fact)))
+    (when update-delta? (push! entry (delta state)))
+    (when (in-memory? state) (push! entry (history state))))
   (delete! (index state) fact)
   nil)
 
@@ -294,11 +307,12 @@ Two keyword arguments:
   (map-insert! (current state) (index state))
   nil)
 
-(defmethod load! ((file-name pathname) &key (indices '(:a :b :c)))
+(defmethod load! ((file-name pathname) &key (indices '(:a :b :c)) in-memory?)
   (assert (cl-fad:file-exists-p file-name) nil "Nonexistent file ~s" file-name)
-  (let ((res (make-fact-base :indices indices :file-name file-name)))
+  (let ((res (make-fact-base :indices indices :file-name file-name :in-memory? in-memory?)))
     (with-open-file (s file-name :direction :input)
       (loop for entry = (read-entry! s) while entry
 	 do (incf (entry-count res))
+	 when in-memory? do (push! entry (history res))
 	 do (apply-entry! res entry)))
     res))
