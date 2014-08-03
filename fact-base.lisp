@@ -82,33 +82,29 @@
     (_ state)))
 
 (defun reverse-from-end-until (state fn)
-  (let ((res (current state)))
-    (flet ((rev! (e) (setf res (reverse-entry res e))))
+  (let ((res (current state))
+	(affected (make-hash-table)))
+    (flet ((rev! (e)
+	     (setf res (reverse-entry res e))
+	     (when (listp (third e))
+	       (setf (gethash (caaddr e) affected) t))))
       (unless (loop for e in (reverse (entries (delta state)))
 		 if (funcall fn e) return t
 		 else do (rev! e))
 	(with-open-elif (s (file-name state))
 	  (loop for e = (read-entry-from-end! s) while e
 	     until (funcall fn e) do (rev! e)))))
-    res))
+    (values res (alexandria:hash-table-keys affected))))
 
 (defmethod rewind-to ((state fact-base) (time timestamp))
   (let ((latest (or (caar (last-cons (delta state))) (latest-entry state))))
     (cond ((local-time:timestamp>= time latest)
-	   (current state))
+	   (values (current state) nil))
 	  ((local-time:timestamp>= (earliest-entry state) time)
-	   nil)
-	  ((> (local-time:timestamp-difference time (earliest-entry state))
-	      (local-time:timestamp-difference latest time))
+	   (values nil (mapcar #'car (current state))))
+	  (t 
 	   (reverse-from-end-until
-	    state (lambda (e) (local-time:timestamp>= time (first e)))))
-	  (t
-	   (let ((res nil))
-	     (with-open-file (s (file-name state))
-	       (loop for e = (read-entry! s) while e
-		  do (setf res (apply-entry res e))
-		  until (local-time:timestamp>= (first e) time))
-	       res))))))
+	    state (lambda (e) (local-time:timestamp>= time (first e))))))))
 
 (defmethod rewind-to ((state fact-base) (index integer))
   (let ((total (+ (entry-count state) (entry-count (delta state)))))
@@ -119,28 +115,18 @@
    state (lambda (e) (and (eql (second e) :tag) (string= (third e) tag)))))
 
 (defmethod rewind-by-internal ((state fact-base) (count integer))
-  (format t "Reversing by ~s" count)
-  (let ((total (+ (entry-count state) (entry-count (delta state)))))
-    (cond ((zerop count)
-	   (current state))
-	  ((>= count total)
-	   nil)
-	  ((> (/ total 2) count)
-	   (reverse-from-end-until
+  (cond ((zerop count)
+	 (values (current state)))
+	((>= count (+ (entry-count state) (entry-count (delta state))))
+	 (values nil (mapcar #'car (current state))))
+	(t (reverse-from-end-until
 	    state (let ((ct count))
 		    (lambda (e) 
 		      (declare (ignore e))
 		      (format t "Reversing one...~%")
 		      (if (zerop ct)
 			  t
-			  (progn (decf ct) nil))))))
-	  (t
-	   (let ((ct (- total count))
-		 (res nil))
-	     (with-open-file (s (file-name state))
-	       (loop repeat ct for e = (read-entry! s)
-		  do (setf res (apply-entry res e))))
-	     res)))))
+			  (progn (decf ct) nil))))))))
 
 (defmethod rewind-by ((state fact-base) delta &optional (units :entries))
   (assert (member units '(:entries :months :years :nanoseconds :seconds :minutes :hours :days))
