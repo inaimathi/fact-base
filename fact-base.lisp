@@ -68,7 +68,8 @@
     ((list _ :change (list fact-a fact-b))
      (insert (delete state fact-a) fact-b))
     ((list _ :delete fact)
-     (delete state fact))))
+     (delete state fact))
+    (_ state)))
 
 (defmethod reverse-entry ((state list) (entry list))
   (match entry
@@ -77,13 +78,19 @@
     ((list _ :change (list fact-a fact-b))
      (insert (delete state fact-b) fact-a))
     ((list _ :delete fact)
-     (insert state fact))))
+     (insert state fact))
+    (_ state)))
 
-(defun reverse-from-delta (state count)
-  (loop with res = (current state) 
-     repeat count for e in (reverse (entries (delta state)))
-     do (setf res (reverse-entry res e))
-     finally (return res)))
+(defun reverse-from-end-until (state fn)
+  (let ((res (current state)))
+    (flet ((rev! (e) (setf res (reverse-entry res e))))
+      (unless (loop for e in (reverse (entries (delta state)))
+		 if (funcall fn e) return t
+		 else do (rev! e))
+	(with-open-elif (s (file-name state))
+	  (loop for e = (read-entry-from-end! s) while e
+	     until (funcall fn e) do (rev! e)))))
+    res))
 
 (defmethod rewind-to ((state fact-base) (time timestamp))
   (let ((latest (or (caar (last-cons (delta state))) (latest-entry state))))
@@ -93,18 +100,8 @@
 	   nil)
 	  ((> (local-time:timestamp-difference time (earliest-entry state))
 	      (local-time:timestamp-difference latest time))
-	   ;; Project back from the delta.
-	   ;; If you still need to go further, start from the end of the file
-	   (let ((res (current state)))
-	     (unless
-		 (loop for e in (reverse (entries (delta state)))
-		    when (local-time:timestamp>= time (first e)) return t
-		    do (setf res (reverse-entry res e)))
-	       (with-open-elif (s (file-name state))
-		 (loop for e = (read-entry-from-end! s) while e
-		    until (local-time:timestamp>= time (first e))
-		    do (setf res (reverse-entry res e)))))
-	     res))
+	   (reverse-from-end-until
+	    state (lambda (e) (local-time:timestamp>= time (first e)))))
 	  (t
 	   (let ((res nil))
 	     (with-open-file (s (file-name state))
@@ -115,24 +112,28 @@
 
 (defmethod rewind-to ((state fact-base) (index integer))
   (let ((total (+ (entry-count state) (entry-count (delta state)))))
-    (rewind-by-internal state (min (max (- total index) 0) total) :entries)))
+    (rewind-by-internal state (min (max (- total index) 0) total))))
 
-(defmethod rewind-by-internal ((state fact-base) (count integer) (unit (eql :entries)))
+(defmethod rewind-to ((state fact-base) (tag string))
+  (reverse-from-end-until
+   state (lambda (e) (and (eql (second e) :tag) (string= (third e) tag)))))
+
+(defmethod rewind-by-internal ((state fact-base) (count integer))
+  (format t "Reversing by ~s" count)
   (let ((total (+ (entry-count state) (entry-count (delta state)))))
     (cond ((zerop count)
 	   (current state))
 	  ((>= count total)
 	   nil)
-	  ((>= (entry-count (delta state)) count)
-	   (reverse-from-delta state count))
 	  ((> (/ total 2) count)
-	   (format t "Reversing from end of file...")
-	   (let* ((dc (entry-count (delta state)))
-		  (res (reverse-from-delta state dc)))
-	     (with-open-elif (s (file-name state))
-	       (loop repeat (- count dc) for e = (read-entry-from-end! s)
-		  do (setf res (reverse-entry res e))))
-	     res))
+	   (reverse-from-end-until
+	    state (let ((ct count))
+		    (lambda (e) 
+		      (declare (ignore e))
+		      (format t "Reversing one...~%")
+		      (if (zerop ct)
+			  t
+			  (progn (decf ct) nil))))))
 	  (t
 	   (let ((ct (- total count))
 		 (res nil))
@@ -146,7 +147,7 @@
 	  nil "units must be one of ~s" 
 	  '(:entries :months :years :nanoseconds :seconds :minutes :hours :days))
   (if (eql units :entries)
-      (rewind-by-internal state delta units)
+      (rewind-by-internal state delta)
       (let ((latest (or (caar (last-cons (delta state))) (latest-entry state))))
 	(rewind-to state (local-time:timestamp- 
 			      latest delta 
@@ -195,6 +196,10 @@
   (let ((id (next-id! state)))
     (insert! state (list id b c))
     id))
+
+(defmethod tag! ((state fact-base) (tag string))
+  (push! (list (local-time:now) :tag tag) (delta state))
+  nil)
 
 (defun insert-fact-internal! (state fact &key (update-delta? t))
   (assert (fact-p fact) nil "INSERT! :: A fact is a list of length 3: ~s" fact)
