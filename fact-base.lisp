@@ -159,6 +159,14 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 				(:hours :hour)
 				(:days :day)))))))
 
+(defmethod fork-at ((state fact-base) (history-index integer) &key (file-name (temp-file-name)))
+  (when (in-memory? state)
+    (with-open-file (s file-name :direction :output :if-does-not-exist :create)
+      (loop repeat history-index 
+	 for e in (entries (history state))
+	 do (write-entry! e s)))
+    file-name))
+
 ;;;;;;;;;; Fact-base specific
 (defun update-id! (state fact)
   (when (>= (first fact) (fact-id state))
@@ -313,6 +321,5 @@ Two keyword arguments:
     (with-open-file (s file-name :direction :input)
       (loop for entry = (read-entry! s) while entry
 	 do (incf (entry-count res))
-	 when in-memory? do (push! entry (history res))
 	 do (apply-entry! res entry)))
     res))
