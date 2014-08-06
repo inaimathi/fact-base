@@ -9,6 +9,6 @@
   (:export :fact-base :make-fact-base :current :delta :total-entries :fork-at :rewind-by :rewind-to
 	   :file-name :next-id!
 	   :for-all :lookup 
-	   :multi-insert! :insert-new! :insert! :delete! 
+	   :multi-insert! :insert-new! :insert! :delete! :change! 
 	   :index! :write! :load!))
 
