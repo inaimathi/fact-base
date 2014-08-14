@@ -136,7 +136,6 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 	    state (let ((ct count))
 		    (lambda (e) 
 		      (declare (ignore e))
-		      (format t "Reversing one...~%")
 		      (if (zerop ct)
 			  t
 			  (progn (decf ct) nil))))))))
