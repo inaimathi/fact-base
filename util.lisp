@@ -1,4 +1,4 @@
-(in-package :fact-base)
+(in-package #:fact-base)
 
 (defmethod fact-p (fact) nil)
 (defmethod fact-p ((fact list)) (and (cddr fact) (not (cdddr fact))))
