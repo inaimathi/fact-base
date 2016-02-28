@@ -195,3 +195,12 @@
 
 - Define a structure other than a list to store history.
 	-Specifically, you want the ability to push to its end (since that's the only way we'll ever be doing it)
+
+### See also
+
+The following posts talk about some of the design decisions and parts of the code of `:fact-base`
+
+- [Fact Bases and Total History](http://langnostic.inaimathi.ca/posts/fact-bases-and-total-history)
+- [Fact Base Indices](http://langnostic.inaimathi.ca/posts/fact-base-indices)
+- [Querying Fact Bases](http://langnostic.inaimathi.ca/posts/querying-fact-bases)
+- [Querying Fact Bases Redux](http://langnostic.inaimathi.ca/posts/querying-fact-bases-redux)
