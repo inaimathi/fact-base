@@ -249,9 +249,9 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 
 ;;;;;;;;;; /(De)?Serialization/i
 (defmethod read-entry! ((s stream))
-  (awhen (read s nil nil)
-    (cons (list->timestamp (car it))
-	  (cdr it))))
+  (when-let (entry (read s nil nil))
+    (cons (list->timestamp (car entry))
+	  (cdr entry))))
 
 (defmethod read-entry-from-end! ((s stream) &key (skip 0))
   "Only use this inside of `with-open-elif`.
