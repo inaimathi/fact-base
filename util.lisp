@@ -61,7 +61,7 @@
   (binding-value (get-binding var bindings)))
 
 (defun extend-bindings (var val bindings)
-  (cons (cons var val) bindings))
+  (acons var val bindings))
 
 (defun subst-bindings (bindings term)
   (cond ((eq bindings +fail+) +fail+)
