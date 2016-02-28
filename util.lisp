@@ -1,4 +1,4 @@
-(in-package :fact-base)
+(in-package #:fact-base)
 
 (defmethod fact-p (fact) nil)
 (defmethod fact-p ((fact list)) (and (cddr fact) (not (cdddr fact))))
@@ -61,15 +61,15 @@
   (binding-value (get-binding var bindings)))
 
 (defun extend-bindings (var val bindings)
-  (cons (cons var val) bindings))
+  (acons var val bindings))
 
 (defun subst-bindings (bindings term)
   (cond ((eq bindings +fail+) +fail+)
 	((not bindings) term)
-	((variable? term) 
-	 (aif (get-binding term bindings)
-	      (subst-bindings bindings (binding-value it))
-	      term))
+	((variable? term)
+	 (if-let (binding (get-binding term bindings))
+           (subst-bindings bindings (binding-value binding))
+           term))
 	((atom term) term)
 	(t (cons (subst-bindings bindings (first term))
 		 (subst-bindings bindings (rest term))))))

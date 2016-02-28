@@ -1,4 +1,4 @@
-(in-package :fact-base)
+(in-package #:fact-base)
 
 (defclass queue ()
   ((entries :accessor entries :initform nil :initarg :entries)

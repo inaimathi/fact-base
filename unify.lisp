@@ -1,4 +1,4 @@
-(in-package :fact-base)
+(in-package #:fact-base)
 
 ;;; Some contents ripped bleeding from PAIP.
 ;;; http://norvig.com/paip/README.html
