@@ -42,7 +42,7 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
     res))
 
 (defmethod lookup ((state list) &key a b c)
-  (if (and (not a) (not b) (not c))
+  (if (every #'null (list a b c))
       state
       (loop for f in state
 	 when (and (or (not a) (equal a (first f)))
@@ -51,7 +51,7 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 	 collect f)))
 
 (defmethod lookup ((state fact-base) &key a b c)
-  (if (every #'not (list a b c))
+  (if (every #'null (list a b c))
       (current state)
       (multiple-value-bind (index ideal-index) (decide-index state a b c)
 	(let ((ix (if index
