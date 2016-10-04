@@ -9,4 +9,4 @@
 	   #:file-name #:next-id!
 	   #:for-all #:lookup
 	   #:multi-insert! #:insert-new! #:insert! #:delete! #:change!
-	   #:index! #:write! #:load!))
+	   #:index! #:write! #:load! #:base!))

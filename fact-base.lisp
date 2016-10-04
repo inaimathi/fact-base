@@ -5,17 +5,17 @@
   ((table :reader table :initform (make-hash-table :test 'equal))))
 
 (defclass fact-base ()
-  ((file-name :reader file-name :initarg :file-name 
+  ((file-name :reader file-name :initarg :file-name
 	      :documentation "The file associated with this fact-base")
-   (fact-id :accessor fact-id :initform 0 
+   (fact-id :accessor fact-id :initform 0
 	    :documentation "The next free fact-id")
-   (delta :accessor delta :initform (queue) 
+   (delta :accessor delta :initform (queue)
 	  :documentation "A collection of history entries that have not yet been written to disk")
    (current :accessor current :initform nil
 	    :documentation "The current projection of this fact-base")
    (index :accessor index :initarg :index
 	  :documentation "The index structure of the current projection (used to accelerate queries)")
-   (entry-count :accessor entry-count :initform 0 
+   (entry-count :accessor entry-count :initform 0
 		:documentation "The count of entries in disk history.")
    (earliest-entry :accessor earliest-entry :initform nil :initarg :earliest-entry
 		   :documentation "The earliest entry in the disk history.")
@@ -29,7 +29,7 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 		 :documentation "The latest entry in the disk history.")))
 
 (defun make-fact-base (&key (indices '(:a :b :c)) (file-name (temp-file-name)) in-memory?)
-  (make-instance 'fact-base :index (make-index indices) :file-name file-name 
+  (make-instance 'fact-base :index (make-index indices) :file-name file-name
 		 :in-memory? in-memory? :history (when in-memory? (queue))))
 
 ;;;;;;;;;; Basics
@@ -65,7 +65,7 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 			   (or (not c) (equal c (third f))))
 		 collect f))))))
 
-(defmethod insert ((state list) (fact list)) 
+(defmethod insert ((state list) (fact list))
   (cons fact state))
 
 (defmethod delete ((state list) (fact list))
@@ -115,7 +115,7 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 	   (values (current state) nil))
 	  ((local-time:timestamp>= (earliest-entry state) time)
 	   (values nil (mapcar #'car (current state))))
-	  (t 
+	  (t
 	   (reverse-from-end-until
 	    state (lambda (e) (local-time:timestamp>= time (first e))))))))
 
@@ -134,7 +134,7 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 	 (values nil (mapcar #'car (current state))))
 	(t (reverse-from-end-until
 	    state (let ((ct count))
-		    (lambda (e) 
+		    (lambda (e)
 		      (declare (ignore e))
 		      (if (zerop ct)
 			  t
@@ -142,13 +142,13 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 
 (defmethod rewind-by ((state fact-base) delta &optional (units :entries))
   (assert (member units '(:entries :months :years :nanoseconds :seconds :minutes :hours :days))
-	  nil "units must be one of ~s" 
+	  nil "units must be one of ~s"
 	  '(:entries :months :years :nanoseconds :seconds :minutes :hours :days))
   (if (eql units :entries)
       (rewind-by-internal state delta)
       (let ((latest (or (caar (last-cons (delta state))) (latest-entry state))))
-	(rewind-to state (local-time:timestamp- 
-			      latest delta 
+	(rewind-to state (local-time:timestamp-
+			      latest delta
 			      (case units
 				(:months :month)
 				(:years :year)
@@ -161,7 +161,7 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 (defmethod fork-at ((state fact-base) (history-index integer) &key (file-name (temp-file-name)))
   (when (in-memory? state)
     (with-open-file (s file-name :direction :output :if-does-not-exist :create)
-      (loop repeat history-index 
+      (loop repeat history-index
 	 for e in (entries (history state))
 	 do (write-entry! e s)))
     file-name))
@@ -177,7 +177,7 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
       (setf earliest-entry (local-time:timestamp-minimum (or earliest-entry ts) ts)
 	    latest-entry (local-time:timestamp-maximum (or latest-entry ts) ts)))
     (match entry
-      ((list _ :insert fact) 
+      ((list _ :insert fact)
        (insert-fact-internal! state fact :update-delta? nil))
       ((list _ :change (list old new))
        (change-fact-internal! state old new :update-delta? nil))
@@ -322,3 +322,8 @@ Two keyword arguments:
 	 do (incf (entry-count res))
 	 do (apply-entry! res entry)))
     res))
+
+(defmethod base! ((file-name pathname) &key (indices '(:a :b :c)) in-memory?)
+  (if (cl-fad:file-exists-p file-name)
+      (load! file-name :indices indices :in-memory? in-memory?)
+      (make-fact-base :indices indices :file-name file-name :in-memory? in-memory?)))

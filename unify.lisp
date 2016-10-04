@@ -72,7 +72,7 @@
 	  +fail+
 	  (loop for g in gens for res = (funcall g)
 	     unless (fail? res) return +fail+
-	     finally (progn 
+	     finally (progn
 		       (setf called? t)
 		       (return bindings)))))))
 
@@ -86,11 +86,11 @@
 			(if (fail? res)
 			    (progn (setf gens (remove g gens))
 				   (next))
-			    res))) 
+			    res)))
 		     (gens
 		      (setf gs gens)
 		      (next))
-		     (t 
+		     (t
 		      +fail+))))
       #'next)))
 
@@ -131,7 +131,7 @@
   (with-gensyms (gen res)
     `(let ((,gen ,(if (and (symbolp (first goal-term))
 			   (member (->key (first goal-term))
-				   (list :quote :backq-list :backq-list*)))
+				   (list :quote :quasiquote :backq-list :backq-list*)))
 		      `(make-goal ,in ,goal-term)
 		      `(make-goal ,in ',goal-term))))
        (loop for ,res = (funcall ,gen)
