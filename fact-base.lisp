@@ -203,7 +203,7 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
     (insert! state (list id b c))
     id))
 
-(defmethod insert-unique! ((state fact-base) (entry list))
+(defmethod insert-if-unique! ((state fact-base) (entry list))
   (unless (lookup state :a (first entry) :b (second entry) :c (third entry))
     (insert! state entry)))
 
