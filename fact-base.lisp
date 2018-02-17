@@ -11,6 +11,8 @@
 	    :documentation "The next free fact-id")
    (delta :accessor delta :initform (queue)
 	  :documentation "A collection of history entries that have not yet been written to disk")
+   (tags :accessor tags :initform nil
+         :documentation "The collection of history tags in effect on this fact base")
    (current :accessor current :initform nil
 	    :documentation "The current projection of this fact-base")
    (index :accessor index :initarg :index
@@ -182,7 +184,9 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
       ((list _ :change (list old new))
        (change-fact-internal! state old new :update-delta? nil))
       ((list _ :delete fact)
-       (delete-fact-internal! state fact :update-delta? nil)))))
+       (delete-fact-internal! state fact :update-delta? nil))
+      ((list _ :tag tag-name)
+       (push tag-name (tags state))))))
 
 (defmethod reverse-entry! ((state fact-base) (entry list))
   (match entry
@@ -191,7 +195,10 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
     ((list _ :change (list old new))
      (change-fact-internal! state new old :update-delta? nil))
     ((list _ :delete fact)
-     (insert-fact-internal! state fact :update-delta? nil))))
+     (insert-fact-internal! state fact :update-delta? nil))
+    ((list _ :tag tag-name)
+     (when (string= tag-name (first (tags state)))
+       (pop (tags state))))))
 
 (defmethod multi-insert! ((state fact-base) (b/c-pairs list))
   (loop with id = (next-id! state)
@@ -209,7 +216,11 @@ If you don't need rewinding very often or quickly, or will keep a very deep hist
 
 (defmethod tag! ((state fact-base) (tag string))
   (push! (list (local-time:now) :tag tag) (delta state))
+  (push tag (tags state))
   nil)
+
+(defmethod tags-of ((state fact-base))
+  (reverse (tags state)))
 
 (defun insert-fact-internal! (state fact &key (update-delta? t))
   (assert (fact-p fact) nil "INSERT! :: A fact is a list of length 3: ~s" fact)

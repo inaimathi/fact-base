@@ -14,7 +14,7 @@
 
 (defun make-range-fn (&optional min-time max-time)
   (cond ((and min-time max-time)
-	 (lambda (entry) 
+	 (lambda (entry)
 	   (local-time:timestamp>= max-time (car entry) min-time)))
 	(max-time
 	 (lambda (entry)
@@ -77,7 +77,7 @@
 (defun any-variables? (exp)
   (if (atom exp)
       (variable? exp)
-      (loop for e in exp 
+      (loop for e in exp
 	 if (listp e) do (any-variables? e)
 	 else if (variable? e) do (return t)
 	 finally (return nil))))
