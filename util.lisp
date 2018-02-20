@@ -6,11 +6,11 @@
 (defmethod ->key ((thing null)) thing)
 (defmethod ->key ((thing symbol)) (intern (symbol-name thing) :keyword))
 
-(defun temp-file-name ()
-  (let* ((f (cl-fad:open-temporary :template "TEMPORARY-FILES:BASE-%"))
+(defun temp-file-name (&key (prefix "base-"))
+  (let* ((f (cl-fad:open-temporary :template "%"))
 	 (fname (file-namestring (pathname f))))
     (close f)
-    fname))
+    (format nil "~a~a" prefix fname)))
 
 (defun make-range-fn (&optional min-time max-time)
   (cond ((and min-time max-time)
